@@ -46,6 +46,41 @@ static void platform_get_keycodes(SDL_Keysym *keysym, int *code, char *ch);
 static SDL_AudioDeviceID device;
 static int g_wavevol = 128;
 
+// Wave mixed into the MIDI output when no separate wave device could be opened.
+static bool g_mix_open;  // MIDI output opened as float stereo at 44100 Hz
+static float *g_mix_wave; // interleaved stereo frames
+static uint32_t g_mix_len, g_mix_pos;
+
+static void mix_wave(const SDL_AudioSpec *spec, const uint8_t *data, uint32_t length) {
+    SDL_LockAudio();
+    bool busy = g_mix_pos < g_mix_len;
+    SDL_UnlockAudio();
+    if (busy) {
+        return;
+    }
+    SDL_AudioCVT cvt;
+    if (SDL_BuildAudioCVT(&cvt, spec->format, spec->channels, spec->freq, AUDIO_F32SYS, 2, 44100) < 0) {
+        return;
+    }
+    cvt.len = (int)length;
+    cvt.buf = malloc((size_t)cvt.len * cvt.len_mult);
+    if (!cvt.buf) {
+        return;
+    }
+    memcpy(cvt.buf, data, length);
+    if (cvt.needed && SDL_ConvertAudio(&cvt) < 0) {
+        free(cvt.buf);
+        return;
+    }
+    SDL_LockAudio();
+    float *old = g_mix_wave;
+    g_mix_wave = (float *)cvt.buf;
+    g_mix_len = (uint32_t)(cvt.len_cvt / (int)sizeof(float));
+    g_mix_pos = 0;
+    SDL_UnlockAudio();
+    free(old);
+}
+
 void platform_set_wave_volume(int wavevol) {
     g_wavevol = wavevol;
 }
@@ -56,8 +91,8 @@ void platform_play_wave(int8_t *src, int length) {
     }
 
     SDL_AudioSpec wavSpec;
-    uint8_t *wavBuffer;
-    uint32_t wavLength;
+    uint8_t *wavBuffer = NULL;
+    uint32_t wavLength = 0;
 
     SDL_RWops *rw = SDL_RWFromMem(src, length);
 
@@ -73,7 +108,13 @@ void platform_play_wave(int8_t *src, int length) {
     // TODO rm
     // rs2_log("wav %i %i %i\n", wavSpec.freq, wavSpec.samples, wavSpec.format);
     // TODO: custom option for having multiple audio devices play sounds at same time (inauthentic) web already does it
-    if (SDL_GetQueuedAudioSize(device) == 0) {
+    if (!device) {
+        // Local build addition: the Wii U SDL driver allows one open audio
+        // device, which the MIDI output already holds, so the wave is converted
+        // to the MIDI format and mixed in midi_callback. Same rule as the queue
+        // below: a new sound starts only when none is playing.
+        if (g_mix_open && wavBuffer) mix_wave(&wavSpec, wavBuffer, wavLength);
+    } else if (SDL_GetQueuedAudioSize(device) == 0) {
         SDL_QueueAudio(device, wavBuffer, wavLength);
         SDL_PauseAudioDevice(device, 0);
     }
@@ -121,11 +162,35 @@ static void midi_callback(void *data, uint8_t *stream, int len) {
         tsf_render_short(g_TinySoundFont, (int16_t *)stream, SampleBlock, 0);
 #else
         tsf_render_float(g_TinySoundFont, (float *)stream, SampleBlock, 0);
+        // Mix any pending wave (see mix_wave); runs with the audio lock held.
+        float *out = (float *)stream;
+        for (int i = 0; i < SampleBlock * 2 && g_mix_pos < g_mix_len; i++) {
+            float v = out[i] + g_mix_wave[g_mix_pos++];
+            out[i] = v > 1.0f ? 1.0f : v < -1.0f ? -1.0f : v;
+        }
 #endif
     }
 }
 
+#ifdef __WIIU__
+// Local build addition: Client3's SDL_Log output goes to rom/log.txt on the SD
+// card (there is no console on hardware). Flushed per line so a crash keeps it.
+static FILE *wiiu_log;
+static void wiiu_log_output(void *userdata, int category, SDL_LogPriority priority, const char *message) {
+    (void)userdata, (void)category;
+    if (!wiiu_log) return;
+    fprintf(wiiu_log, "%s%s", priority >= SDL_LOG_PRIORITY_ERROR ? "[ERROR] " : "", message);
+    size_t n = strlen(message);
+    if (!n || message[n - 1] != '\n') fputc('\n', wiiu_log);
+    fflush(wiiu_log);
+}
+#endif
+
 bool platform_init(void) {
+#ifdef __WIIU__
+    wiiu_log = fopen("rom/log.txt", "w");
+    SDL_LogSetOutputFunction(wiiu_log_output, NULL);
+#endif
     return true;
 }
 
@@ -255,7 +320,7 @@ void platform_new(GameShell *shell) {
 
     SDL_AudioSpec midiSpec;
     midiSpec.freq = 44100;
-    midiSpec.format = AUDIO_F32;
+    midiSpec.format = AUDIO_F32SYS; // tsf renders native-endian floats (AUDIO_F32 is little-endian)
     midiSpec.channels = 2;
     midiSpec.samples = 4096;
     midiSpec.callback = midi_callback;
@@ -269,6 +334,8 @@ void platform_new(GameShell *shell) {
 
         if (SDL_OpenAudio(&midiSpec, NULL) < 0) {
             rs2_error("Could not open the audio hardware or the desired audio output format: %s\n", SDL_GetError());
+        } else {
+            g_mix_open = true; // obtained spec NULL: SDL converts to exactly midiSpec
         }
         SDL_PauseAudio(0);
     }
@@ -284,6 +351,10 @@ void platform_new(GameShell *shell) {
     if (!device) {
         rs2_error("SDL_OpenAudioDevice(): %s\n", SDL_GetError());
     }
+#ifdef __WIIU__
+    rs2_log("audio: driver=%s soundfont=%s midi_status=%d wave_device=%u\n", SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "none",
+        g_TinySoundFont ? "loaded" : "missing", (int)SDL_GetAudioStatus(), (unsigned)device);
+#endif
 }
 
 void platform_free(void) {
