@@ -1,14 +1,14 @@
 # Client3 FPS: Wii U notes
 
-This repository is a fork of Client3, a third-party revision-225 C99 client, for first-person play. It started on October 28, 2026.
-- Commit `8cdc8e9` is the upstream snapshot.
-- Commit `1704167` is the Wii U setup.
+This repository is a fork of [Client3](https://github.com/lesleyrs/Client3), lesleyrs' revision-225 C99 client, for first-person play on the Wii U. It started on October 28, 2026.
+- Commit `53c4cf8` is upstream Client3 (`lesleyrs/Client3` main, October 26, 2026).
+- Commit `5e84e0c` is the Wii U setup, also published as the `wiiu` branch of [CalyxOfHeld/Client3](https://github.com/CalyxOfHeld/Client3).
 
 Two paths are involved:
 - `C:\Users\USER\Documents\client3-wiiu` is the plain Client3 Wii U build. It stays as it is.
 - The repository path must have no spaces, because the devkitPro Wii U makefile fails on them.
 
-## Changes from upstream Client3 (commit 1704167)
+## Changes from upstream Client3 (commit 5e84e0c)
 - `src/entry/client.c:185`: `archive_checksum[4]` (media) changed from `855958935` to `292972807`.
   - That is the CRC32 of the local server's `engine/data/pack/client/media`.
   - Without it, login fails with "RuneScape has been updated!".
