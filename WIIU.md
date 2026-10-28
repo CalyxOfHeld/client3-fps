@@ -1,8 +1,14 @@
-# Client3 for the Wii U (local build setup)
+# Client3 FPS: Wii U notes
 
-This is a build copy of `2004scape-LostCityRS/2004scape C Rewrite/Client3-main/`, the third-party rev-225 C99 client. It lives here because the devkitPro Wii U makefile fails on the space in "2004scape C Rewrite". The user chose Client3 for the Wii U on October 28, 2026.
+This repository is a fork of Client3, a third-party revision-225 C99 client, for first-person play. It started on October 28, 2026.
+- Commit `8cdc8e9` is the upstream snapshot.
+- Commit `1704167` is the Wii U setup.
 
-## Changes from Client3-main
+Two paths are involved:
+- `C:\Users\USER\Documents\client3-wiiu` is the plain Client3 Wii U build. It stays as it is.
+- The repository path must have no spaces, because the devkitPro Wii U makefile fails on them.
+
+## Changes from upstream Client3 (commit 1704167)
 - `src/entry/client.c:185`: `archive_checksum[4]` (media) changed from `855958935` to `292972807`.
   - That is the CRC32 of the local server's `engine/data/pack/client/media`.
   - Without it, login fails with "RuneScape has been updated!".
@@ -13,24 +19,24 @@ This is a build copy of `2004scape-LostCityRS/2004scape C Rewrite/Client3-main/`
   - `portoff = 1`: server port 43595.
   - `lowmem = 0`.
 
-- Sound, added October 28, 2026; untested on hardware so far:
+- Sound, added October 28, 2026; confirmed on hardware:
   - `src/thirdparty/tsf.h`: SF2 values and 16-bit samples are byte-swapped on big-endian CPUs.
     - TSF read the little-endian `.sf2` fields as they were stored, which is why Client3's README says tinysoundfont "doesn't work on powerpc".
     - `genAmount`'s byte pair is reversed on big-endian CPUs, so `range.lo`/`hi` stay correct after the 16-bit swap.
     - Little-endian builds are unchanged.
   - `src/platform/sdl2.c`: the MIDI device is opened as `AUDIO_F32SYS` instead of `AUDIO_F32`. `AUDIO_F32` is little-endian float; TSF renders native floats.
-  - Music confirmed playing on hardware (log `logs/run1-log.txt`). That log also showed `SDL_OpenAudioDevice(): Audio device already open`: the Wii U SDL driver allows one device, so sound effects never played.
+  - Music confirmed playing on hardware (log `wiiu-logs/run1-log.txt`). That log also showed `SDL_OpenAudioDevice(): Audio device already open`: the Wii U SDL driver allows one device, so sound effects never played.
   - Fix in `src/platform/sdl2.c`: when the wave device cannot open, each wave is converted (SDL_AudioCVT) to the MIDI format, float stereo 44100 Hz, and mixed in `midi_callback`.
     - It keeps Client3's rule: a new sound starts only when none is playing.
     - `wavBuffer`/`wavLength` are now initialised in case `SDL_LoadWAV_RW` fails.
-  - Confirmed on hardware: music and sound effects both play (`logs/run2-log.txt`; the "already open" line is expected and handled).
+  - Confirmed on hardware: music and sound effects both play (`wiiu-logs/run2-log.txt`; the "already open" line is expected and handled).
 - Log, added: on the Wii U, SDL_Log output (rs2_log/rs2_error) goes to `rom/log.txt` on the SD card, flushed per line. It includes an `audio:` line with the driver, soundfont, MIDI status and wave device.
 
 ## Build (PowerShell)
 ```
-& "C:\devkitPro\msys2\usr\bin\bash.exe" -lc "export DEVKITPRO=/c/devkitPro DEVKITPPC=/c/devkitPro/devkitPPC; export PATH=/c/devkitPro/portlibs/wiiu/bin:/c/devkitPro/devkitPPC/bin:`$PATH; cd /c/Users/USER/Documents/client3-wiiu && make -f wiiu.mk APP_NAME=Client3 APP_SHORTNAME=Client3 APP_AUTHOR=Client3"
+& "C:\devkitPro\msys2\usr\bin\bash.exe" -lc "export DEVKITPRO=/c/devkitPro DEVKITPPC=/c/devkitPro/devkitPPC; export PATH=/c/devkitPro/portlibs/wiiu/bin:/c/devkitPro/devkitPPC/bin:`$PATH; cd /c/Users/USER/Documents/client3-fps && make -f wiiu.mk -j8"
 ```
-The output is `client.wuhb`. `out/client3.wuhb` is the build that ran on hardware (SHA256 `789da63b…`, music and sound effects working).
+The output is `client.wuhb`. The app is named "Client3 FPS" in `wiiu.mk`.
 
 ## Install (FTPiiU, Wii U at 192.168.1.139)
 - `client.wuhb` goes to `/fs/vol/external01/wiiu/apps/client3-fps/client3-fps.wuhb` (this fork, "Client3 FPS"; the plain Client3 build is in `wiiu/apps/client3/`).
