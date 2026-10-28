@@ -49,4 +49,13 @@ The output is `client.wuhb`. The app is named "Client3 FPS" in `wiiu.mk`.
 - X: run toggle.
 - Y: `::perf` fps display.
 
+## First-person controls (this fork; `first_person = 1` in `rom/config.ini`)
+- Left stick: walk in 8 directions relative to the view, in a straight line. The stick stops at walls; it never paths around them.
+- Right stick: look around (up and down limited to about 70 degrees).
+- ZR: left click at the crosshair. ZL: right click (opens the menu at the crosshair); pick the option by touch.
+- Minus (−): switch between first-person and the original camera.
+- D-pad: left and right turn the view, up and down look up and down. Touch works as before; the next stick movement moves the pointer back to the crosshair.
+- On PC: the arrow keys do the same; type `::fp` to toggle (needs `allow_commands = 1`).
+- The hardware log (`rom/log.txt`) prints `pad axis N first moved` once per stick axis, to confirm the axis numbering (0 LX, 1 LY, 2 RX, 3 RY assumed).
+
 Hardware result, October 28, 2026: about 20 fps in game with `lowmem = 0`, by the user's estimate. RS2004-C reached 9.8 fps.

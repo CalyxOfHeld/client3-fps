@@ -2483,6 +2483,10 @@ static void client_update_orbit_camera(Client *c) {
     } else {
         c->orbitCameraPitchVelocity /= 2;
     }
+    if (_Custom.first_person) {
+        // fork: the keys turn the view itself, so left turns left (the orbit moves the camera around the player)
+        c->orbit_camera_yaw = c->orbit_camera_yaw - c->orbitCameraYawVelocity / 2 & 0x7ff;
+    } else
     c->orbit_camera_yaw = c->orbit_camera_yaw + c->orbitCameraYawVelocity / 2 & 0x7ff;
     c->orbit_camera_pitch += c->orbitCameraPitchVelocity / 2;
     if (c->orbit_camera_pitch < 128) {
@@ -2531,6 +2535,13 @@ static void client_update_orbit_camera(Client *c) {
     if (_Custom.first_person) {
         firstperson_update(c);
     }
+}
+
+static bool client_try_move(Client *c, int srcX, int srcZ, int dx, int dz, int type, int locWidth, int locLength, int locRotation, int locShape, int forceapproach, bool tryNearest);
+
+// fork: stick walking (firstperson.c) sends the same packet as a click on the ground
+bool client_walk_to(Client *c, int tileX, int tileZ) {
+    return client_try_move(c, c->local_player->pathing_entity.pathTileX[0], c->local_player->pathing_entity.pathTileZ[0], tileX, tileZ, 0, 0, 0, 0, 0, 0, false);
 }
 
 static bool client_try_move(Client *c, int srcX, int srcZ, int dx, int dz, int type, int locWidth, int locLength, int locRotation, int locShape, int forceapproach, bool tryNearest) {
@@ -9034,6 +9045,9 @@ void client_draw_scene(Client *c) {
         }
 #endif
         drawStringRight(c->font_plain11, 507, 213, buf, YELLOW, true);
+    }
+    if (_Custom.first_person && !c->cutscene) {
+        firstperson_draw_crosshair(c);
     }
     pixmap_last = rs2_now();
     pixmap_draw(c->area_viewport, 8, 11);

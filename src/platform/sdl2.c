@@ -9,6 +9,7 @@
 #include "../client.h"
 #include "../custom.h"
 #include "../defines.h"
+#include "../firstperson.h"
 #include "../gameshell.h"
 #include "../inputtracking.h"
 #include "../pixmap.h"
@@ -776,12 +777,28 @@ void platform_poll_events(Client *c) {
 #define JOY_UP    13
 #define JOY_RIGHT 14
 #define JOY_DOWN  15
+#define JOY_ZL    8 // fork
+#define JOY_ZR    9 // fork
 
         case SDL_JOYAXISMOTION: {
-            // rs2_log("axis %d value %d\n", e.jaxis.axis, e.jaxis.value);
+            // fork: sticks drive the first-person view (0 LX, 1 LY, 2 RX, 3 RY)
+            firstperson_pad_axis(e.jaxis.axis, e.jaxis.value);
         } break;
         case SDL_JOYBUTTONDOWN: {
             switch (e.jbutton.button) {
+            case JOY_ZR: // fork: left click at the first-person crosshair
+                if (_Custom.first_person && c->ingame) {
+                    firstperson_pad_click(c, 1);
+                }
+                break;
+            case JOY_ZL: // fork: right click (menu) at the crosshair
+                if (_Custom.first_person && c->ingame) {
+                    firstperson_pad_click(c, 2);
+                }
+                break;
+            case JOY_MINUS: // fork: first-person toggle
+                _Custom.first_person = !_Custom.first_person;
+                break;
             case JOY_A:
                 break;
             case JOY_B:
@@ -810,6 +827,10 @@ void platform_poll_events(Client *c) {
         } break;
         case SDL_JOYBUTTONUP: {
             switch (e.jbutton.button) {
+            case JOY_ZR:
+            case JOY_ZL:
+                firstperson_pad_release(c);
+                break;
             case JOY_A:
                 break;
             case JOY_B:

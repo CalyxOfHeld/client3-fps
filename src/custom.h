@@ -26,6 +26,7 @@ typedef struct {
     int dev_autologin;
     int dev_capture_frame;
     int dev_capture_count;
+    int dev_walk;
 } Custom;
 
 bool load_ini_args(void);
