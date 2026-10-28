@@ -13,9 +13,9 @@ TOPDIR ?= $(CURDIR)
 # APP_SHORTNAME sets the short name of the application
 # APP_AUTHOR sets the author of the application
 #-------------------------------------------------------------------------------
-#APP_NAME	:= Application Name
-#APP_SHORTNAME	:= App Name
-#APP_AUTHOR	:= Built with devkitPPC & wut
+APP_NAME	:= Client3 FPS
+APP_SHORTNAME	:= Client3 FPS
+APP_AUTHOR	:= Client3 (first-person fork)
 
 include $(DEVKITPRO)/wut/share/wut_rules
 

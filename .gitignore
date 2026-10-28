@@ -96,3 +96,6 @@
 /config.ini
 /**/*.rdi
 .DS_Store
+
+# fork: Wii U build copies
+/out

@@ -33,7 +33,7 @@ This is a build copy of `2004scape-LostCityRS/2004scape C Rewrite/Client3-main/`
 The output is `client.wuhb`. `out/client3.wuhb` is the build that ran on hardware (SHA256 `789da63b…`, music and sound effects working).
 
 ## Install (FTPiiU, Wii U at 192.168.1.139)
-- `client.wuhb` goes to `/fs/vol/external01/wiiu/apps/client3/client3.wuhb`.
+- `client.wuhb` goes to `/fs/vol/external01/wiiu/apps/client3-fps/client3-fps.wuhb` (this fork, "Client3 FPS"; the plain Client3 build is in `wiiu/apps/client3/`).
 - `rom/` goes to `/fs/vol/external01/rom/` (the SD root). Client3 opens `rom/...` relative to the SD root.
 - Escape spaces in FTP paths as `%20`. Some jingle names contain spaces.
 
