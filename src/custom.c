@@ -115,6 +115,10 @@ void load_ini_config(Client *c) {
 #endif
     INI_INT_LOG(&(&_Custom), item_outlines, );
     INI_INT_LOG(&(&_Custom), show_performance, );
+    INI_INT_LOG(&(&_Custom), first_person, );
+    INI_INT_LOG(&(&_Custom), dev_autologin, );
+    INI_INT_LOG(&(&_Custom), dev_capture_frame, );
+    INI_INT_LOG(&(&_Custom), dev_capture_count, );
 #ifdef GL11
     _Custom.use_opengl11 = true;
 #endif

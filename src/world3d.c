@@ -1088,7 +1088,11 @@ void world3d_draw(World3D *world3d, int eyeX, int eyeY, int eyeZ, int topLevel, 
     _World3D.sinEyeYaw = _Pix3D.sin_table[eyeYaw];
     _World3D.cosEyeYaw = _Pix3D.cos_table[eyeYaw];
 
-    _World3D.visibilityMap = _World3D.visibilityMatrix[(eyePitch - 128) / 32][eyeYaw / 64];
+    if (_World3D.customVisibilityMap) {
+        _World3D.visibilityMap = _World3D.customVisibilityMap;
+    } else {
+        _World3D.visibilityMap = _World3D.visibilityMatrix[(eyePitch - 128) / 32][eyeYaw / 64];
+    }
     _World3D.eyeX = eyeX;
     _World3D.eyeY = eyeY;
     _World3D.eyeZ = eyeZ;

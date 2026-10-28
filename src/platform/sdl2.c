@@ -449,6 +449,13 @@ void platform_stop_midi(void) {
     }
 }
 
+// fork: dev screenshot of the window (non-resizable mode) for first-person testing
+void platform_dev_capture(const char *path) {
+    if (window_surface && SDL_SaveBMP(window_surface, path) != 0) {
+        rs2_error("SDL2: SDL_SaveBMP failed: %s\n", SDL_GetError());
+    }
+}
+
 void platform_blit_surface(Surface *surface, int x, int y) {
     if (!_Custom.resizable) {
         int xoff = (window_surface->w - SCREEN_WIDTH) / 2;

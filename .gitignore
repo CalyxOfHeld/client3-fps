@@ -99,3 +99,6 @@
 
 # fork: Wii U build copies
 /out
+/run.log
+/run.err
+/fps-capture*.bmp

@@ -3,6 +3,7 @@
 #include "client.h"
 #include "defines.h"
 #include "gameshell.h"
+#include "firstperson.h"
 #include "inputtracking.h"
 #include "pixmap.h"
 #include "platform.h"
@@ -150,6 +151,7 @@ void gameshell_run(Client *c) {
         client_draw(c);
         gameshell_update_touch(c); // update mouse after client_draw_scene to fix model picking (not needed for touch on release like client-ts)
         platform_update_surface();
+        firstperson_dev_after_frame(c); // fork: dev screenshots
     }
     if (c->shell->state == -1) {
         gameshell_shutdown(c);

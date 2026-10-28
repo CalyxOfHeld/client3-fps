@@ -71,5 +71,6 @@ void platform_stop_midi(void);
 void platform_poll_events(Client *c);
 void platform_blit_surface(Surface *surface, int x, int y);
 void platform_update_surface(void);
+void platform_dev_capture(const char *path); // fork: SDL2 only
 uint64_t rs2_now(void);
 void rs2_sleep(int ms);

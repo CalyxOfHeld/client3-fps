@@ -55,6 +55,7 @@ typedef struct {
     LinkList *drawTileQueue;   // = new LinkList();
     bool (*visibilityMatrix)[32][51][51]; //[8][32][51][51];
     bool (*visibilityMap)[51];
+    bool (*customVisibilityMap)[51]; // fork: first-person camera supplies its own map (NULL: use visibilityMatrix)
     int viewportCenterX;
     int viewportCenterY;
     int viewportLeft;

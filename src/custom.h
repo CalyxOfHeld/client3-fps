@@ -19,6 +19,13 @@ typedef struct {
     bool resizable;
     bool item_outlines;
     bool use_opengl11;
+
+    // fork: first-person camera (::fp toggles it in game)
+    bool first_person;
+    // fork: PC test hooks, see firstperson.c
+    int dev_autologin;
+    int dev_capture_frame;
+    int dev_capture_count;
 } Custom;
 
 bool load_ini_args(void);

@@ -18,6 +18,7 @@
 #include "../datastruct/jstring.h"
 #include "../datastruct/linklist.h"
 #include "../defines.h"
+#include "../firstperson.h"
 #include "../flotype.h"
 #include "../gameshell.h"
 #include "../idktype.h"
@@ -876,6 +877,7 @@ void client_update(Client *c) {
     }
 
     _Client.loop_cycle++;
+    firstperson_dev_update(c);
     if (c->ingame) {
         client_update_game(c);
     } else {
@@ -2525,6 +2527,10 @@ static void client_update_orbit_camera(Client *c) {
     } else if (clamp < c->cameraPitchClamp) {
         c->cameraPitchClamp += (clamp - c->cameraPitchClamp) / 80;
     }
+
+    if (_Custom.first_person) {
+        firstperson_update(c);
+    }
 }
 
 static bool client_try_move(Client *c, int srcX, int srcZ, int dx, int dz, int type, int locWidth, int locLength, int locRotation, int locShape, int forceapproach, bool tryNearest) {
@@ -3872,6 +3878,10 @@ static void handleInputKey(Client *c) {
                                 // _Custom.show_debug = !_Custom.show_debug;
                             } else if (strcmp(c->chat_typed, "::perf") == 0) {
                                 _Custom.show_performance = !_Custom.show_performance;
+                            } else if (strcmp(c->chat_typed, "::fp") == 0) {
+                                // fork: first-person camera toggle
+                                _Custom.first_person = !_Custom.first_person;
+                                client_add_message(c, 0, _Custom.first_person ? "First-person view on." : "First-person view off.", "");
                             } else if (strcmp(c->chat_typed, "::gl") == 0) {
 #ifdef GL11
                                 _Custom.use_opengl11 = !_Custom.use_opengl11;
@@ -8895,6 +8905,7 @@ static void draw3DEntityElements(Client *c) {
 
 void client_draw_scene(Client *c) {
     c->scene_cycle++;
+    _World3D.customVisibilityMap = NULL; // fork: set by firstperson_camera
     pushPlayers(c);
     pushNpcs(c);
     pushProjectiles(c);
@@ -8916,6 +8927,9 @@ void client_draw_scene(Client *c) {
         }
 
         int yaw = c->orbit_camera_yaw + c->camera_anticheat_angle & 0x7ff;
+        if (_Custom.first_person) {
+            firstperson_camera(c);
+        } else
         orbitCamera(c, c->orbitCameraX, getHeightmapY(c, c->currentLevel, c->local_player->pathing_entity.x, c->local_player->pathing_entity.z) - 50, c->orbitCameraZ, yaw, pitch, pitch * 3 + 600);
 
         _Client.cyclelogic2++;
@@ -9034,7 +9048,9 @@ void client_draw_scene(Client *c) {
 
 int getTopLevel(Client *c) {
     int top = 3;
-    if (c->cameraPitch < 310) {
+    // fork: in first person the camera is on the player's tile, so there is no line to trace
+    // (it would divide by zero); only the player-tile roof check below applies
+    if (c->cameraPitch < 310 && !_Custom.first_person) {
         int cameraLocalTileX = c->cameraX >> 7;
         int cameraLocalTileZ = c->cameraZ >> 7;
         int playerLocalTileX = c->local_player->pathing_entity.x >> 7;
@@ -9364,6 +9380,11 @@ void pushPlayers(Client *c) {
         }
 
         if (!player || !playerentity_is_visible(player)) {
+            continue;
+        }
+
+        // fork: no own body in first person (the eye sits inside it)
+        if (i == -1 && _Custom.first_person) {
             continue;
         }
 
