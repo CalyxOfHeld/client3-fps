@@ -1,3 +1,5 @@
+> **Client3 FPS** is a first-person fork of [Client3](https://github.com/lesleyrs/Client3) for the Wii U GamePad: the left stick walks, the right stick looks, ZR/ZL click at a centre crosshair, and Minus switches back to the normal camera. See [WIIU.md](WIIU.md) for the changes, build, install and controls. The plain Wii U build is at [CalyxOfHeld/Client3](https://github.com/CalyxOfHeld/Client3/tree/wiiu). The original Client3 README follows.
+
 # RuneScape 2 revision #225 (18 May 2004) C99 port
 Portable single-threaded C client for early RS2, the last update before a new cache format and ondemand protocol.
 
