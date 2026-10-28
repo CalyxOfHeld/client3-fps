@@ -788,6 +788,7 @@ void platform_poll_events(Client *c) {
             firstperson_pad_axis(e.jaxis.axis, e.jaxis.value);
         } break;
         case SDL_JOYBUTTONDOWN: {
+            rs2_log("pad button %d down\n", e.jbutton.button); // fork: crash breadcrumbs
             switch (e.jbutton.button) {
             case JOY_ZR: // fork: left click at the first-person crosshair
                 if (_Custom.first_person && c->ingame) {

@@ -9,6 +9,7 @@
 #include "collisionmap.h"
 #include "custom.h"
 #include "gameshell.h"
+#include "inputtracking.h"
 #include "pix2d.h"
 #include "pix3d.h"
 #include "platform.h"
@@ -18,6 +19,7 @@ extern Custom _Custom;
 extern ClientData _Client;
 extern Pix3D _Pix3D;
 extern SceneData _World3D;
+extern InputTracking _InputTracking;
 
 // Eye height above the ground under the player, in scene units (a tile is 128).
 #define FP_EYE_HEIGHT 176
@@ -78,9 +80,15 @@ static void clamp_pitch(void) {
     }
 }
 
+// The crosshair is the pad's pointer. While the server's input tracking runs (its
+// AFK check), pointer moves are reported there as a mouse's would be; without them a
+// stick-only session sends an empty report and the server logs the player out.
 static void mouse_to_crosshair(Client *c) {
     c->shell->mouse_x = FP_VIEWPORT_X + FP_CROSS_X;
     c->shell->mouse_y = FP_VIEWPORT_Y + FP_CROSS_Y;
+    if (_InputTracking.enabled) {
+        inputtracking_mouse_moved(&_InputTracking, c->shell->mouse_x, c->shell->mouse_y);
+    }
 }
 
 // One step from (x, z) by (dx, dz) is open: the collision masks client_try_move uses.
@@ -195,6 +203,11 @@ static void dev_wander(Client *c) {
         next_change = ticks + 40 + rand() % 120;
         for (int i = 0; i < 4; i++) {
             _FirstPerson.axis[i] = rand() % 3 == 0 ? 0 : rand() % 65535 - 32767;
+        }
+        // arrow keys (the D-pad on the Wii U): one held at a time, or none
+        int key = rand() % 6;
+        for (int i = 1; i <= 4; i++) {
+            c->shell->action_key[i] = i == key;
         }
     }
     if (ticks >= next_click) {
@@ -333,6 +346,9 @@ void firstperson_pad_click(Client *c, int button) {
 }
 
 void firstperson_pad_release(Client *c) {
+    if (c->shell->mouse_button && _InputTracking.enabled) {
+        inputtracking_mouse_released(&_InputTracking, c->shell->mouse_button == 2 ? 1 : 0);
+    }
     c->shell->mouse_button = 0;
 }
 
@@ -341,7 +357,7 @@ static void dev_capture(Client *c);
 void firstperson_after_frame(Client *c) {
     // heartbeat for hardware logs: what the client was doing before a crash, and the fps
     static int last_beat;
-    if (c->ingame && _Client.loop_cycle - last_beat >= 1500) {
+    if (c->ingame && _Client.loop_cycle - last_beat >= 500) {
         last_beat = _Client.loop_cycle;
         rs2_log("beat: cycle=%d fps=%d first_person=%d tile=(%d,%d) level=%d yaw=%d pitch=%d\n", _Client.loop_cycle, c->shell->fps, _Custom.first_person,
             c->local_player->pathing_entity.x >> 7, c->local_player->pathing_entity.z >> 7, c->currentLevel, c->orbit_camera_yaw, _FirstPerson.pitch);
@@ -352,6 +368,9 @@ void firstperson_after_frame(Client *c) {
         last_touch_y = c->shell->mouse_y;
         last_touch_button = _FirstPerson.pad_click;
         c->shell->mouse_button = _FirstPerson.pad_click;
+        if (_InputTracking.enabled) {
+            inputtracking_mouse_pressed(&_InputTracking, last_touch_x, last_touch_y, _FirstPerson.pad_click == 2 ? 1 : 0);
+        }
         _FirstPerson.pad_click = 0;
     }
     dev_capture(c);

@@ -1,0 +1,38 @@
+RS2 user client - release #225
+World config:
+  socketip: 192.168.1.100
+  http_port: 80
+  nodeid: 10
+  portoff: 1
+  lowmem: 0
+  members: 1
+
+Options config:
+  rsa_exponent: 81f390b2cf8ca7039ee507975951d5a0b15a87bf8b3f99c966834118c50fd94d
+  rsa_modulus: 88c38748a58228f7261cdc340b5691d7d0975dee0ecdb717609e6bf971eb3fe723ef9d130e4686813739768ad9472eb46d8bfcc042c1a5fcb05e931f632eea5d
+  username: shared
+  password: *********
+  hide_dns: 0
+  hide_debug_sprite: 1
+  allow_commands: 1
+  allow_debugprocs: 1
+  chat_era: 0
+  remember_username: 1
+  remember_password: 1
+  resizable: 0
+  item_outlines: 1
+  show_performance: 1
+  first_person: 1
+  dev_autologin: 0
+  dev_capture_frame: 0
+  dev_capture_count: 0
+  dev_walk: 0
+  dev_wander: 0
+
+[ERROR] SDL_OpenAudioDevice(): Audio device already open
+audio: driver=wiiu soundfont=loaded midi_status=1 wave_device=0
+beat: cycle=4021 fps=50 first_person=1 tile=(0,0) level=0 yaw=2045 pitch=0
+pad axis 2 first moved: -28986
+pad axis 3 first moved: 16237
+pad axis 1 first moved: -18467
+pad axis 0 first moved: -19415

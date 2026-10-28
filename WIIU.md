@@ -64,3 +64,6 @@ Hardware result, October 28, 2026: about 20 fps in game with `lowmem = 0`, by th
 - `rom/log.txt` is the current run; `rom/log-prev.txt` keeps the run before it (so a crash's log survives a relaunch).
 - Every 30 s in game: a `beat:` line (fps, tile, camera). Logouts print a `logout:` line with the cause.
 - Hardware run 3 (`wiiu-logs/run3-fps-log.txt`): axes confirmed 0 LX, 1 LY, 2 RX, 3 RY. The user reported rough controls and one crash. One cause found: stick-only play never reset the idle timer, so the client's 90 s idle logout ended the session.
+- Hardware run 4 (`wiiu-logs/run4-log.txt`): crashed within 30 s of login, with no cause in the log. Reproduced on PC with random input (`dev_wander` plus arrow keys): `model_draw2` indexed the face depth buckets below 0. `min_depth` only allows for the part of a model below its origin, because the original camera always looks down. Looking up in first person (D-pad up or the right stick) puts higher parts of tall models out of range. Fixed in `model.c` (`model_depth_bucket`).
+- The server logged out stick-only sessions after about 3.5 minutes. Its input-tracking (AFK) report was empty, because the sticks are not mouse input. Crosshair moves and pad clicks are now reported to input tracking.
+- `out/client-<hash>.elf` keeps the symbols for each uploaded build, for looking up crash addresses.

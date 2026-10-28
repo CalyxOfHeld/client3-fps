@@ -1086,9 +1086,22 @@ void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int s
     gl_start_model(m, sceneX, sceneY, sceneZ, yaw);
 }
 
+// fork: the depth bucket for a face, kept inside the buckets model_draw2 clears and
+// draws. min_depth only allows for the part of a model below its origin (max_y), as
+// the original camera always looks down; looking up in first person brings the parts
+// above it nearer than that (a negative index), and a bucket at or past max_depth was
+// never cleared, so its count grew until it overflowed.
+static int model_depth_bucket(Model *m, int depth) {
+    int limit = m->max_depth < MODEL_MAX_DEPTH ? m->max_depth : MODEL_MAX_DEPTH;
+    if (depth >= limit) {
+        depth = limit - 1;
+    }
+    return depth < 0 ? 0 : depth;
+}
+
 void model_draw2(Model *m, bool projected, bool hasInput, int bitset) {
     // added < MODEL_MAX_DEPTH checks for model 714 and for optional smaller depth buffer
-    for (int i = 0; i < m->max_depth && i < MODEL_MAX_DEPTH; i++) {
+    for (int i = 0; (i < m->max_depth || i == 0) && i < MODEL_MAX_DEPTH; i++) { // fork: bucket 0 always (model_depth_bucket)
         _Model.tmp_depth_face_count[i] = 0;
     }
     for (int f = 0; f < m->face_count; f++) {
@@ -1102,8 +1115,8 @@ void model_draw2(Model *m, bool projected, bool hasInput, int bitset) {
             int xc = _Model.vertex_screen_x[c];
             if (projected && (xa == -5000 || xb == -5000 || xc == -5000)) {
                 _Model.face_near_clipped[f] = true;
-                int depth_average = (_Model.vertex_screen_z[a] + _Model.vertex_screen_z[b] + _Model.vertex_screen_z[c]) / 3 + m->min_depth;
-                if (depth_average < MODEL_MAX_DEPTH) {
+                int depth_average = model_depth_bucket(m, (_Model.vertex_screen_z[a] + _Model.vertex_screen_z[b] + _Model.vertex_screen_z[c]) / 3 + m->min_depth);
+                if (_Model.tmp_depth_face_count[depth_average] < MODEL_DEPTH_FACE_COUNT) {
                     _Model.tmp_depth_faces[depth_average][_Model.tmp_depth_face_count[depth_average]++] = f;
                 }
             } else {
@@ -1115,8 +1128,8 @@ void model_draw2(Model *m, bool projected, bool hasInput, int bitset) {
                 if ((xa - xb) * (_Model.vertex_screen_y[c] - _Model.vertex_screen_y[b]) - (_Model.vertex_screen_y[a] - _Model.vertex_screen_y[b]) * (xc - xb) > 0) {
                     _Model.face_near_clipped[f] = false;
                     _Model.face_clipped_x[f] = xa >= 0 || xb >= 0 || xc >= 0 || xa <= _Pix2D.bound_x || xb <= _Pix2D.bound_x || xc <= _Pix2D.bound_x;
-                    int depth_average = (_Model.vertex_screen_z[a] + _Model.vertex_screen_z[b] + _Model.vertex_screen_z[c]) / 3 + m->min_depth;
-                    if (depth_average < MODEL_MAX_DEPTH) {
+                    int depth_average = model_depth_bucket(m, (_Model.vertex_screen_z[a] + _Model.vertex_screen_z[b] + _Model.vertex_screen_z[c]) / 3 + m->min_depth);
+                    if (_Model.tmp_depth_face_count[depth_average] < MODEL_DEPTH_FACE_COUNT) {
                         _Model.tmp_depth_faces[depth_average][_Model.tmp_depth_face_count[depth_average]++] = f;
                     }
                 }
