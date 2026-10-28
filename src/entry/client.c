@@ -5118,6 +5118,7 @@ bool client_read(Client *c) {
     }
     if (c->packet_type == 142) {
         // LOGOUT
+        rs2_log("logout: server sent LOGOUT (idle_cycles=%d)\n", c->shell->idle_cycles); // fork: logout diagnostics
         client_logout(c);
         c->packet_type = -1;
         return false;
@@ -7311,6 +7312,7 @@ void reset_interface_animation(int id) {
 
 void client_try_reconnect(Client *c) {
     if (c->idle_timeout > 0) {
+        rs2_log("logout: connection lost while idle (idle_timeout=%d)\n", c->idle_timeout); // fork: logout diagnostics
         client_logout(c);
     } else {
         pixmap_bind(c->area_viewport);
@@ -7325,6 +7327,7 @@ void client_try_reconnect(Client *c) {
 
         client_login(c, c->username, c->password, true);
         if (!c->ingame) {
+            rs2_log("logout: connection lost and the reconnect failed\n"); // fork: logout diagnostics
             client_logout(c);
         }
 

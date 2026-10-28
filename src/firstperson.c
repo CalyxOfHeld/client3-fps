@@ -1,6 +1,7 @@
 // First-person camera (fork addition, not part of the original client).
 #include "firstperson.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,13 +31,17 @@ extern SceneData _World3D;
 #define FP_CROSS_Y 167
 #define FP_VIEWPORT_X 8
 #define FP_VIEWPORT_Y 11
-// Stick dead zone and full-tilt turn rates (2048ths of a turn per tick at full tilt).
-#define FP_STICK_DEAD 8000
-#define FP_STICK_YAW 28
-#define FP_STICK_PITCH 18
+// Stick dead zone and full-tilt turn rates (2048ths of a turn per 20 ms tick).
+// The rate follows the square of the tilt: fine aim near the centre, fast turns at full tilt.
+#define FP_STICK_DEAD 7000
+#define FP_STICK_YAW 36
+#define FP_STICK_PITCH 22
 // A stick walk targets this many tiles ahead and is re-sent as the player moves.
-#define FP_WALK_AHEAD 2
+#define FP_WALK_AHEAD 3
 #define FP_WALK_RESEND 30
+// A walk keeps its direction while the stick stays within about 35 degrees of it
+// (cos 35 = 0.819), so turning the view a little does not flip straight/diagonal.
+#define FP_WALK_KEEP 0.819f
 
 FirstPerson _FirstPerson;
 
@@ -45,6 +50,23 @@ static int stick(int value) {
         return 0;
     }
     return value;
+}
+
+// Turn rate for a stick value: 0 inside the dead zone, rising with the square of the tilt to max.
+static int stick_rate(int value, int max) {
+    int mag = abs(stick(value));
+    if (!mag) {
+        return 0;
+    }
+    float t = (float)(mag - FP_STICK_DEAD) / (float)(32767 - FP_STICK_DEAD);
+    if (t > 1.0f) {
+        t = 1.0f;
+    }
+    int rate = (int)(t * t * max + 0.5f);
+    if (rate < 1) {
+        rate = 1;
+    }
+    return value < 0 ? -rate : rate;
 }
 
 static void clamp_pitch(void) {
@@ -112,13 +134,37 @@ static void stick_walk(Client *c) {
     int forward = -ly, right = lx;
     int mx = (int)(((long long)forward * -sinYaw + (long long)right * cosYaw) >> 16);
     int mz = (int)(((long long)forward * cosYaw + (long long)right * sinYaw) >> 16);
-    // Snap to 8 directions (tan 22.5 degrees is about 0.414).
+    // Snap to 8 directions (tan 22.5 degrees is about 0.414), keeping the current one
+    // while the stick stays close to it.
     int dx = abs(mx) * 1000 > abs(mz) * 414 ? (mx > 0 ? 1 : -1) : 0;
     int dz = abs(mz) * 1000 > abs(mx) * 414 ? (mz > 0 ? 1 : -1) : 0;
+    if (_FirstPerson.walk_dx || _FirstPerson.walk_dz) {
+        float wx = (float)_FirstPerson.walk_dx, wz = (float)_FirstPerson.walk_dz;
+        float dot = (float)mx * wx + (float)mz * wz;
+        float len = sqrtf((float)mx * mx + (float)mz * mz) * sqrtf(wx * wx + wz * wz);
+        if (len > 0.0f && dot > FP_WALK_KEEP * len) {
+            dx = _FirstPerson.walk_dx;
+            dz = _FirstPerson.walk_dz;
+        }
+    }
     int **flags = c->levelCollisionMap[c->currentLevel]->flags;
     int steps = 0;
     while (steps < FP_WALK_AHEAD && can_step(flags, tileX + dx * steps, tileZ + dz * steps, dx, dz)) {
         steps++;
+    }
+    if (steps == 0 && dx && dz) {
+        // diagonal blocked (a wall or a corner): slide along it, the stick's larger axis first
+        int first = abs(mx) >= abs(mz) ? 0 : 1;
+        for (int i = 0; i < 2 && steps == 0; i++) {
+            int sx = (i == first) ? dx : 0, sz = (i == first) ? 0 : dz;
+            while (steps < FP_WALK_AHEAD && can_step(flags, tileX + sx * steps, tileZ + sz * steps, sx, sz)) {
+                steps++;
+            }
+            if (steps) {
+                dx = sx;
+                dz = sz;
+            }
+        }
     }
     int targetX = tileX + dx * steps, targetZ = tileZ + dz * steps;
     if (dx == _FirstPerson.walk_dx && dz == _FirstPerson.walk_dz && targetX == _FirstPerson.walk_tile_x && targetZ == _FirstPerson.walk_tile_z && _Client.loop_cycle - _FirstPerson.walk_cycle < FP_WALK_RESEND) {
@@ -131,6 +177,34 @@ static void stick_walk(Client *c) {
     _FirstPerson.walk_cycle = _Client.loop_cycle;
     if (steps > 0) {
         client_walk_to(c, targetX, targetZ);
+    }
+}
+
+// Dev: dev_wander = S drives random stick input, crosshair clicks and camera
+// toggles for S seconds in game, then exits (a crash test for PC debug builds).
+static void dev_wander(Client *c) {
+    static int ticks, next_change, next_click, next_toggle = 1000;
+    c->shell->idle_cycles = 0; // the test also runs with the orbit camera, where the sticks are not input
+    ticks++;
+    if (ticks >= _Custom.dev_wander * 50) {
+        rs2_log("dev wander: done after %d ticks, tile=(%d,%d) first_person=%d\n", ticks, c->local_player->pathing_entity.x >> 7, c->local_player->pathing_entity.z >> 7, _Custom.first_person);
+        fflush(stdout);
+        exit(0);
+    }
+    if (ticks >= next_change) {
+        next_change = ticks + 40 + rand() % 120;
+        for (int i = 0; i < 4; i++) {
+            _FirstPerson.axis[i] = rand() % 3 == 0 ? 0 : rand() % 65535 - 32767;
+        }
+    }
+    if (ticks >= next_click) {
+        next_click = ticks + 100 + rand() % 300;
+        firstperson_pad_click(c, rand() % 4 == 0 ? 2 : 1);
+    }
+    if (ticks >= next_toggle) {
+        next_toggle = ticks + 1000 + rand() % 1500;
+        _Custom.first_person = !_Custom.first_person;
+        rs2_log("dev wander: tick %d first_person=%d tile=(%d,%d)\n", ticks, _Custom.first_person, c->local_player->pathing_entity.x >> 7, c->local_player->pathing_entity.z >> 7);
     }
 }
 
@@ -154,52 +228,63 @@ void firstperson_update(Client *c) {
     // Right stick looks (right turns right, down looks down).
     int rx = stick(_FirstPerson.axis[2]), ry = stick(_FirstPerson.axis[3]);
     if (rx || ry) {
-        c->orbit_camera_yaw = c->orbit_camera_yaw - rx * FP_STICK_YAW / 32768 & 0x7ff;
-        _FirstPerson.pitch += ry * FP_STICK_PITCH / 32768;
+        c->orbit_camera_yaw = c->orbit_camera_yaw - stick_rate(rx, FP_STICK_YAW) & 0x7ff;
+        _FirstPerson.pitch += stick_rate(ry, FP_STICK_PITCH);
     }
     clamp_pitch();
 
     if (rx || ry || stick(_FirstPerson.axis[0]) || stick(_FirstPerson.axis[1])) {
         // pad play aims with the crosshair (a touch moves the mouse until the next stick use)
         mouse_to_crosshair(c);
+        // stick play is activity: without this the client's idle logout (90 s without
+        // mouse or key input) ends a stick-only session
+        c->shell->idle_cycles = 0;
     }
     stick_walk(c);
 }
 
-// world3d_test_point with this frame's eye angles and a margin around the viewport.
-static bool point_visible(int x, int y, int z, int sinYaw, int cosYaw, int sinPitch, int cosPitch) {
+// Which sides of the view (with a margin) a point lies beyond, as bits; 0 is inside.
+// The projection is world3d_test_point's with this frame's eye angles.
+enum { OUT_LEFT = 1, OUT_RIGHT = 2, OUT_TOP = 4, OUT_BOTTOM = 8, OUT_NEAR = 16, OUT_FAR = 32 };
+static int outcode(int x, int y, int z, int sinYaw, int cosYaw, int sinPitch, int cosPitch) {
     int px = (z * sinYaw + x * cosYaw) >> 16;
     int tmp = (z * cosYaw - x * sinYaw) >> 16;
     int pz = (y * sinPitch + tmp * cosPitch) >> 16;
     int py = (y * cosPitch - tmp * sinPitch) >> 16;
-    if (pz < 50 || pz > 3500) {
-        return false;
+    if (pz < 50) {
+        return OUT_NEAR;
+    }
+    if (pz > 3500) {
+        return OUT_FAR;
     }
     int vx = 256 + (px << 9) / pz;
     int vy = 167 + (py << 9) / pz;
-    return vx >= -64 && vx <= 512 + 64 && vy >= -64 && vy <= 334 + 64;
+    return (vx < -64 ? OUT_LEFT : 0) | (vx > 512 + 64 ? OUT_RIGHT : 0) | (vy < -64 ? OUT_TOP : 0) | (vy > 334 + 64 ? OUT_BOTTOM : 0);
 }
 
+// A tile is drawn unless the box from its ground up to FP_TILE_TOP lies wholly
+// beyond one side of the view: each of its 8 corners shares an outcode bit.
+// Corners are shared between tiles, so each is projected once (52 x 52 x 2).
+#define FP_TILE_TOP 1200
 static void build_visibility(Client *c, int eyeX, int eyeY, int eyeZ, int yaw, int pitch) {
     int sinYaw = _Pix3D.sin_table[yaw], cosYaw = _Pix3D.cos_table[yaw];
     int sinPitch = _Pix3D.sin_table[pitch], cosPitch = _Pix3D.cos_table[pitch];
     int eyeTileX = eyeX >> 7, eyeTileZ = eyeZ >> 7;
-    static const int lift[] = {0, 256, 640, 1200};
-    for (int dx = -25; dx <= 25; dx++) {
-        for (int dz = -25; dz <= 25; dz++) {
-            bool visible = abs(dx) <= FP_NEAR_TILES && abs(dz) <= FP_NEAR_TILES;
-            int tx = eyeTileX + dx, tz = eyeTileZ + dz;
-            for (int corner = 0; !visible && corner < 4; corner++) {
-                int cx = tx + (corner & 1), cz = tz + (corner >> 1);
-                if (cx < 0 || cz < 0 || cx > 104 || cz > 104) {
-                    continue;
-                }
-                int ground = c->levelHeightmap[c->currentLevel][cx][cz] - eyeY;
-                for (int i = 0; !visible && i < 4; i++) {
-                    visible = point_visible((cx << 7) - eyeX, ground - lift[i], (cz << 7) - eyeZ, sinYaw, cosYaw, sinPitch, cosPitch);
-                }
-            }
-            _FirstPerson.visibility[dx + 25][dz + 25] = visible;
+    static int corner[52][52];
+    for (int i = 0; i < 52; i++) {
+        for (int j = 0; j < 52; j++) {
+            int cx = eyeTileX - 25 + i, cz = eyeTileZ - 25 + j;
+            int hx = cx < 0 ? 0 : cx > 104 ? 104 : cx, hz = cz < 0 ? 0 : cz > 104 ? 104 : cz;
+            int ground = c->levelHeightmap[c->currentLevel][hx][hz] - eyeY;
+            int x = (cx << 7) - eyeX, z = (cz << 7) - eyeZ;
+            corner[i][j] = outcode(x, ground, z, sinYaw, cosYaw, sinPitch, cosPitch) & outcode(x, ground - FP_TILE_TOP, z, sinYaw, cosYaw, sinPitch, cosPitch);
+        }
+    }
+    for (int dx = 0; dx < 51; dx++) {
+        for (int dz = 0; dz < 51; dz++) {
+            bool near = abs(dx - 25) <= FP_NEAR_TILES && abs(dz - 25) <= FP_NEAR_TILES;
+            int out = corner[dx][dz] & corner[dx + 1][dz] & corner[dx][dz + 1] & corner[dx + 1][dz + 1];
+            _FirstPerson.visibility[dx][dz] = near || out == 0;
         }
     }
 }
@@ -243,6 +328,7 @@ void firstperson_pad_axis(int axis, int value) {
 // mouse moves to the crosshair now and the click lands after the next frame.
 void firstperson_pad_click(Client *c, int button) {
     mouse_to_crosshair(c);
+    c->shell->idle_cycles = 0;
     _FirstPerson.pad_click = button;
 }
 
@@ -253,6 +339,13 @@ void firstperson_pad_release(Client *c) {
 static void dev_capture(Client *c);
 
 void firstperson_after_frame(Client *c) {
+    // heartbeat for hardware logs: what the client was doing before a crash, and the fps
+    static int last_beat;
+    if (c->ingame && _Client.loop_cycle - last_beat >= 1500) {
+        last_beat = _Client.loop_cycle;
+        rs2_log("beat: cycle=%d fps=%d first_person=%d tile=(%d,%d) level=%d yaw=%d pitch=%d\n", _Client.loop_cycle, c->shell->fps, _Custom.first_person,
+            c->local_player->pathing_entity.x >> 7, c->local_player->pathing_entity.z >> 7, c->currentLevel, c->orbit_camera_yaw, _FirstPerson.pitch);
+    }
     if (_FirstPerson.pad_click) {
         update_touch = true;
         last_touch_x = c->shell->mouse_x;
@@ -271,10 +364,19 @@ void firstperson_after_frame(Client *c) {
 // looking down and up), then exits; dev_walk = T holds the left stick forward (back if negative)
 // for T ticks from the first capture.
 void firstperson_dev_update(Client *c) {
+    if (_Custom.dev_wander > 0 && c->ingame) {
+        dev_wander(c);
+    }
     // Retries every 15 s: after a dev run exits, the server holds the session for a while.
     static int next_try = 100;
     if (_Custom.dev_autologin == 1 && !c->ingame && _Client.loop_cycle > next_try) {
         next_try = _Client.loop_cycle + 750;
+        // A logout clears the username and password: keep the configured username.
+        static char username[sizeof(c->username)];
+        if (!username[0]) {
+            strcpy(username, c->username);
+        }
+        strcpy(c->username, username);
         // The test password comes from the environment so it stays out of config.ini.
         const char *password = getenv("CLIENT3_DEV_PASSWORD");
         if (password) {

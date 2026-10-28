@@ -189,6 +189,9 @@ static void wiiu_log_output(void *userdata, int category, SDL_LogPriority priori
 
 bool platform_init(void) {
 #ifdef __WIIU__
+    // fork: keep the previous run's log (a crashed run is otherwise overwritten on relaunch)
+    remove("rom/log-prev.txt");
+    rename("rom/log.txt", "rom/log-prev.txt");
     wiiu_log = fopen("rom/log.txt", "w");
     SDL_LogSetOutputFunction(wiiu_log_output, NULL);
 #endif
