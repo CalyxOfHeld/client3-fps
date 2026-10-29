@@ -31,6 +31,7 @@ typedef struct {
     int dev_eye_x;
     int dev_eye_z;
     int dev_capture_pitch;
+    int dev_capture_turn;
     int dev_nofix;
 } Custom;
 

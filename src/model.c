@@ -967,7 +967,19 @@ void model_draw_simple(Model *m, int pitch, int yaw, int roll, int eyePitch, int
     // }
 }
 
+// fork: the near plane. The original cuts geometry nearer than 50 units, which the
+// overhead camera never comes close to. In first person a wall on the edge of the
+// tile you stand on is about 45 units away, so its face was cut away whole and the
+// view went black or showed the inside of the window frames. 20 keeps it.
+#define FP_NEAR 20
+static int nearZ = 50;
+
+int model_near_plane(void) {
+    return _Custom.first_person && !_Custom.dev_nofix ? FP_NEAR : 50;
+}
+
 void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int sinCameraYaw, int cosCameraYaw, int sceneX, int sceneY, int sceneZ, int key) {
+    nearZ = model_near_plane();
     // fork: in first person the bounds are a sphere around the whole model. The original
     // extents (radius scaled by the pitch, height only above the origin) assume a camera
     // looking down from a distance; at eye level they can put a nearby wall or building
@@ -984,7 +996,7 @@ void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int s
     int b = (sceneY * sinCameraPitch + a * cosCameraPitch) >> 16;
     int c = sphere ? sphere : m->radius * cosCameraPitch >> 16;
     int d = b + c;
-    if (d <= 50 || b >= 3500) {
+    if (d <= nearZ || b >= 3500) {
         return;
     }
     int e = (sceneZ * sinCameraYaw + sceneX * cosCameraYaw) >> 16;
@@ -1009,7 +1021,7 @@ void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int s
     }
     int i = sphere ? sphere : c + (m->max_y * sinCameraPitch >> 16);
     bool project = false;
-    if (b - i <= 50) {
+    if (b - i <= nearZ) {
         project = true;
     }
     bool hasInput = false;
@@ -1073,7 +1085,7 @@ void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int s
         z = (y * sinCameraPitch + z * cosCameraPitch) >> 16;
 
         _Model.vertex_screen_z[v] = z - b;
-        if (z >= 50) {
+        if (z >= nearZ) {
             _Model.vertex_screen_x[v] = cx + (x << 9) / z;
             _Model.vertex_screen_y[v] = cy + (temp << 9) / z;
         } else {
@@ -1338,7 +1350,7 @@ static int near_reciprocal16(int d) {
 }
 
 // fork: a vertex behind the near plane has no screen position (-5000), so the edge
-// to it is cut at z=50 in view space, as in the Java client. The port read the screen
+// to it is cut at the near plane in view space, as in the Java client. The port read the screen
 // arrays here (screen x/y for the vertex in front, -5000 for the one behind, depth
 // relative to the model), which threw the cut points far off and drew the face as a
 // huge smear; the overhead camera seldom cuts a face, first person does all the time.
@@ -1356,7 +1368,7 @@ void model_draw_near_clipped_face(Model *m, int index) {
     int xB;
     int xC;
     int yA;
-    if (zA >= 50) {
+    if (zA >= nearZ) {
         _Model.clipped_x[0] = _Model.vertex_screen_x[a];
         _Model.clipped_y[0] = _Model.vertex_screen_y[a];
         n++;
@@ -1365,21 +1377,21 @@ void model_draw_near_clipped_face(Model *m, int index) {
         xA = _Model.vertex_view_space_x[a];
         xB = _Model.vertex_view_space_y[a];
         xC = m->face_color_a[index];
-        if (zC >= 50) {
-            yA = (50 - zA) * near_reciprocal16(zC - zA);
-            _Model.clipped_x[0] = centerX + ((xA + ((_Model.vertex_view_space_x[c] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[0] = centerY + ((xB + ((_Model.vertex_view_space_y[c] - xB) * yA >> 16)) << 9) / 50;
+        if (zC >= nearZ) {
+            yA = (nearZ - zA) * near_reciprocal16(zC - zA);
+            _Model.clipped_x[0] = centerX + ((xA + ((_Model.vertex_view_space_x[c] - xA) * yA >> 16)) << 9) / nearZ;
+            _Model.clipped_y[0] = centerY + ((xB + ((_Model.vertex_view_space_y[c] - xB) * yA >> 16)) << 9) / nearZ;
             n++;
             _Model.clipped_color[0] = xC + ((m->face_color_c[index] - xC) * yA >> 16);
         }
-        if (zB >= 50) {
-            yA = (50 - zA) * near_reciprocal16(zB - zA);
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[b] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[b] - xB) * yA >> 16)) << 9) / 50;
+        if (zB >= nearZ) {
+            yA = (nearZ - zA) * near_reciprocal16(zB - zA);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[b] - xA) * yA >> 16)) << 9) / nearZ;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[b] - xB) * yA >> 16)) << 9) / nearZ;
             _Model.clipped_color[n++] = xC + ((m->face_color_b[index] - xC) * yA >> 16);
         }
     }
-    if (zB >= 50) {
+    if (zB >= nearZ) {
         _Model.clipped_x[n] = _Model.vertex_screen_x[b];
         _Model.clipped_y[n] = _Model.vertex_screen_y[b];
         _Model.clipped_color[n++] = m->face_color_b[index];
@@ -1387,20 +1399,20 @@ void model_draw_near_clipped_face(Model *m, int index) {
         xA = _Model.vertex_view_space_x[b];
         xB = _Model.vertex_view_space_y[b];
         xC = m->face_color_b[index];
-        if (zA >= 50) {
-            yA = (50 - zB) * near_reciprocal16(zA - zB);
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[a] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[a] - xB) * yA >> 16)) << 9) / 50;
+        if (zA >= nearZ) {
+            yA = (nearZ - zB) * near_reciprocal16(zA - zB);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[a] - xA) * yA >> 16)) << 9) / nearZ;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[a] - xB) * yA >> 16)) << 9) / nearZ;
             _Model.clipped_color[n++] = xC + ((m->face_color_a[index] - xC) * yA >> 16);
         }
-        if (zC >= 50) {
-            yA = (50 - zB) * near_reciprocal16(zC - zB);
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[c] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[c] - xB) * yA >> 16)) << 9) / 50;
+        if (zC >= nearZ) {
+            yA = (nearZ - zB) * near_reciprocal16(zC - zB);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[c] - xA) * yA >> 16)) << 9) / nearZ;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[c] - xB) * yA >> 16)) << 9) / nearZ;
             _Model.clipped_color[n++] = xC + ((m->face_color_c[index] - xC) * yA >> 16);
         }
     }
-    if (zC >= 50) {
+    if (zC >= nearZ) {
         _Model.clipped_x[n] = _Model.vertex_screen_x[c];
         _Model.clipped_y[n] = _Model.vertex_screen_y[c];
         _Model.clipped_color[n++] = m->face_color_c[index];
@@ -1408,16 +1420,16 @@ void model_draw_near_clipped_face(Model *m, int index) {
         xA = _Model.vertex_view_space_x[c];
         xB = _Model.vertex_view_space_y[c];
         xC = m->face_color_c[index];
-        if (zB >= 50) {
-            yA = (50 - zC) * near_reciprocal16(zB - zC);
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[b] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[b] - xB) * yA >> 16)) << 9) / 50;
+        if (zB >= nearZ) {
+            yA = (nearZ - zC) * near_reciprocal16(zB - zC);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[b] - xA) * yA >> 16)) << 9) / nearZ;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[b] - xB) * yA >> 16)) << 9) / nearZ;
             _Model.clipped_color[n++] = xC + ((m->face_color_b[index] - xC) * yA >> 16);
         }
-        if (zA >= 50) {
-            yA = (50 - zC) * near_reciprocal16(zA - zC);
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[a] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[a] - xB) * yA >> 16)) << 9) / 50;
+        if (zA >= nearZ) {
+            yA = (nearZ - zC) * near_reciprocal16(zA - zC);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[a] - xA) * yA >> 16)) << 9) / nearZ;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[a] - xB) * yA >> 16)) << 9) / nearZ;
             _Model.clipped_color[n++] = xC + ((m->face_color_a[index] - xC) * yA >> 16);
         }
     }

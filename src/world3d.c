@@ -1252,6 +1252,75 @@ void world3d_draw(World3D *world3d, int eyeX, int eyeY, int eyeZ, int topLevel, 
     }
 }
 
+// fork: draw order across levels in first person. A tile waits for the tiles beyond
+// it (away from the eye) on its own level, and an upper-level tile waits for the tile
+// below it, but nothing makes a tile wait for the upper levels beyond it. Looking down
+// from overhead that never shows; at eye level the ground-floor wall in front could be
+// drawn before the upper floor behind it, which then painted over the wall (upstairs
+// objects and beams seen through walls from any distance). In first person a tile's
+// front walls wait for the higher levels beyond it, and an upper tile waits for the
+// lower levels beyond it instead of the tile below (with locs that span tiles, that
+// wait and the new one could wait on each other). A finished tile queues the tiles on
+// the other levels next to it, nearer the eye. If tiles still end up waiting on each
+// other, the second pass in world3d_draw draws them as before; none did in testing.
+static bool fp_level_order(void) {
+    return _Custom.first_person && !_Custom.dev_nofix;
+}
+
+static bool levels_pending(World3D *world3d, int from, int to, int x, int z) {
+    for (int l = from; l < to; l++) {
+        Ground *g = world3d->levelTiles[l][x][z];
+        if (g && g->update) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// a tile on levels [from, to) beyond this one still to be drawn. As with the waits on
+// the tile's own level, a side where a loc spans into the next tile is left out: a loc
+// is drawn once all its tiles are reached, so its far tile can wait on its near one.
+static bool beyond_pending(World3D *world3d, int from, int to, int tileX, int tileZ, int spans) {
+    if (tileX <= _World3D.eyeTileX && tileX > _World3D.minDrawTileX && (spans & 0x1) == 0 && levels_pending(world3d, from, to, tileX - 1, tileZ)) {
+        return true;
+    }
+    if (tileX >= _World3D.eyeTileX && tileX < _World3D.maxDrawTileX - 1 && (spans & 0x4) == 0 && levels_pending(world3d, from, to, tileX + 1, tileZ)) {
+        return true;
+    }
+    if (tileZ <= _World3D.eyeTileZ && tileZ > _World3D.minDrawTileZ && (spans & 0x8) == 0 && levels_pending(world3d, from, to, tileX, tileZ - 1)) {
+        return true;
+    }
+    if (tileZ >= _World3D.eyeTileZ && tileZ < _World3D.maxDrawTileZ - 1 && (spans & 0x2) == 0 && levels_pending(world3d, from, to, tileX, tileZ + 1)) {
+        return true;
+    }
+    return false;
+}
+
+static void queue_levels(World3D *world3d, int skip, int x, int z) {
+    for (int l = 0; l < world3d->maxLevel; l++) {
+        Ground *g = l == skip ? NULL : world3d->levelTiles[l][x][z];
+        if (g && g->update) {
+            linklist_add_tail(_World3D.drawTileQueue, &g->link);
+        }
+    }
+}
+
+// queues the tiles on the other levels next to this one, nearer the eye
+static void queue_levels_nearer(World3D *world3d, int level, int tileX, int tileZ) {
+    if (tileX < _World3D.eyeTileX) {
+        queue_levels(world3d, level, tileX + 1, tileZ);
+    }
+    if (tileZ < _World3D.eyeTileZ) {
+        queue_levels(world3d, level, tileX, tileZ + 1);
+    }
+    if (tileX > _World3D.eyeTileX) {
+        queue_levels(world3d, level, tileX - 1, tileZ);
+    }
+    if (tileZ > _World3D.eyeTileZ) {
+        queue_levels(world3d, level, tileX, tileZ - 1);
+    }
+}
+
 void world3d_draw_tile(World3D *world3d, Ground *next, bool checkAdjacent, int loopCycle) {
     linklist_add_tail(_World3D.drawTileQueue, &next->link);
 
@@ -1274,7 +1343,11 @@ void world3d_draw_tile(World3D *world3d, Ground *next, bool checkAdjacent, int l
 
         if (tile->visible) {
             if (checkAdjacent) {
-                if (level > 0) {
+                if (level > 0 && fp_level_order()) {
+                    if (beyond_pending(world3d, 0, level, tileX, tileZ, tile->locSpans)) {
+                        continue;
+                    }
+                } else if (level > 0) {
                     Ground *above = world3d->levelTiles[level - 1][tileX][tileZ];
 
                     if (above && above->update) {
@@ -1657,6 +1730,9 @@ void world3d_draw_tile(World3D *world3d, Ground *next, bool checkAdjacent, int l
             continue;
         }
 
+        if (fp_level_order() && beyond_pending(world3d, level + 1, world3d->maxLevel, tileX, tileZ, tile->locSpans)) {
+            continue;
+        }
         if (tileX <= _World3D.eyeTileX && tileX > _World3D.minDrawTileX) {
             Ground *adjacent = tiles[tileX - 1][tileZ];
             if (adjacent && adjacent->update) {
@@ -1789,6 +1865,10 @@ void world3d_draw_tile(World3D *world3d, Ground *next, bool checkAdjacent, int l
                 linklist_add_tail(_World3D.drawTileQueue, &adjacent->link);
             }
         }
+
+        if (fp_level_order()) {
+            queue_levels_nearer(world3d, level, tileX, tileZ);
+        }
     }
 }
 
@@ -1799,7 +1879,7 @@ void world3d_draw_tile(World3D *world3d, Ground *next, bool checkAdjacent, int l
 // vertex) against the plane and draws what is left, one or two triangles. A textured
 // triangle keeps the tile's texture basis (origin and two axis points), so the texture
 // lines up with the unclipped tiles.
-#define GROUND_NEAR 50
+#define GROUND_NEAR model_near_plane()
 
 static bool ground_clipping(void) {
 #ifdef GL11

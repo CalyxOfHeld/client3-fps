@@ -803,7 +803,10 @@ void platform_poll_events(Client *c) {
             case JOY_MINUS: // fork: first-person toggle
                 _Custom.first_person = !_Custom.first_person;
                 break;
-            case JOY_A:
+            case JOY_A: // fork: first-person screenshot (rom/shot-N.bmp and a log line)
+                if (_Custom.first_person && c->ingame) {
+                    firstperson_screenshot(c);
+                }
                 break;
             case JOY_B:
                 right_touch = true;

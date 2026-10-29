@@ -31,6 +31,7 @@ void firstperson_draw_crosshair(Client *c);
 void firstperson_pad_axis(int axis, int value);
 void firstperson_pad_click(Client *c, int button);
 void firstperson_pad_release(Client *c);
+void firstperson_screenshot(Client *c);
 // Per frame after the screen update: pending pad clicks and the dev capture.
 void firstperson_after_frame(Client *c);
 // Dev hook (PC testing): auto-login from config.ini.

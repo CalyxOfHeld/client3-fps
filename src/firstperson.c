@@ -337,6 +337,15 @@ static void dev_log_slopes(Client *c) {
         foundZ[n] = bz;
         rs2_log("dev slope: tile=(%d,%d) rise=%d player=(%d,%d)\n", bx, bz, best, px, pz);
     }
+    // and the walls within 6 tiles
+    for (int x = px - 6; x <= px + 6; x++) {
+        for (int z = pz - 6; z <= pz + 6; z++) {
+            Ground *g = x >= 0 && z >= 0 && x < 104 && z < 104 ? c->scene->levelTiles[c->currentLevel][x][z] : NULL;
+            if (g && g->wall) {
+                rs2_log("dev wall: tile=(%d,%d) typeA=%d typeB=%d\n", x, z, g->wall->typeA, g->wall->typeB);
+            }
+        }
+    }
 }
 
 void firstperson_camera(Client *c) {
@@ -345,8 +354,9 @@ void firstperson_camera(Client *c) {
     if (_Custom.dev_eye_x > 0 && _Custom.dev_eye_z > 0) {
         // Dev: the camera stands on this tile (centre); the player stays where it is.
         dev_log_slopes(c);
-        x = (_Custom.dev_eye_x << 7) + 64;
-        z = (_Custom.dev_eye_z << 7) + 64;
+        // a tile number (< 128) means its centre; larger values are scene units
+        x = _Custom.dev_eye_x < 128 ? (_Custom.dev_eye_x << 7) + 64 : _Custom.dev_eye_x;
+        z = _Custom.dev_eye_z < 128 ? (_Custom.dev_eye_z << 7) + 64 : _Custom.dev_eye_z;
     }
     c->cameraX = x;
     c->cameraZ = z;
@@ -393,6 +403,28 @@ void firstperson_pad_release(Client *c) {
         inputtracking_mouse_released(&_InputTracking, c->shell->mouse_button == 2 ? 1 : 0);
     }
     c->shell->mouse_button = 0;
+}
+
+// A screenshot of the frame (rom/shot-N.bmp, numbered on from the files already
+// there) and a log line with the camera, so a view reported from hardware can be
+// rebuilt on PC (dev_eye_x/z take the scene coordinates).
+void firstperson_screenshot(Client *c) {
+#if SDL == 2
+    static int next;
+    char path[64];
+    for (;;) {
+        snprintf(path, sizeof(path), "rom/shot-%d.bmp", next++);
+        FILE *f = fopen(path, "rb");
+        if (!f) {
+            break;
+        }
+        fclose(f);
+    }
+    platform_dev_capture(path);
+    rs2_log("shot %s: camera=(%d,%d,%d) yaw=%d pitch=%d level=%d world tile=(%d,%d)\n", path, c->cameraX, c->cameraY, c->cameraZ, c->cameraYaw, c->cameraPitch, c->currentLevel, (c->cameraX >> 7) + c->sceneBaseTileX, (c->cameraZ >> 7) + c->sceneBaseTileZ);
+#else
+    (void)c;
+#endif
 }
 
 static void dev_capture(Client *c);
@@ -484,7 +516,9 @@ static void dev_capture(Client *c) {
         return; // walking test: keep the view still
     }
     // Four quarter turns level, then down and up at the pitch limits.
-    if (i < 3) {
+    if (_Custom.dev_capture_turn > 0) {
+        c->orbit_camera_yaw = c->orbit_camera_yaw + _Custom.dev_capture_turn & 0x7ff; // dev: every capture level, this far apart
+    } else if (i < 3) {
         c->orbit_camera_yaw = c->orbit_camera_yaw + 512 & 0x7ff;
     } else {
         _FirstPerson.pitch = i == 3 ? FP_PITCH_LIMIT : -FP_PITCH_LIMIT;

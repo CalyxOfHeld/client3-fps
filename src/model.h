@@ -149,6 +149,7 @@ void model_calculate_bounds_y(Model *m);
 bool model_point_within_triangle(int x, int y, int ya, int yb, int yc, int xa, int xb, int xc);
 void model_draw_simple(Model *m, int pitch, int yaw, int roll, int eyePitch, int eyeX, int eyeY, int eyeZ);
 void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int sinCameraYaw, int cosCameraYaw, int sceneX, int sceneY, int sceneZ, int key);
+int model_near_plane(void); // fork: 50, nearer in first person
 void model_draw2(Model *m, bool projected, bool hasInput, int bitset);
 void model_draw_face(Model *m, int index);
 void model_draw_near_clipped_face(Model *m, int index);
