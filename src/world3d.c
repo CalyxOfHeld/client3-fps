@@ -21,9 +21,7 @@ SceneData _World3D = {.lowMemory = true};
 extern Pix2D _Pix2D;
 extern Pix3D _Pix3D;
 extern TileOverlayData _TileOverlay;
-#ifdef GL11
-extern Custom _Custom;
-#endif
+extern Custom _Custom; // fork: first person (ground near clipping); upstream needed it for GL11 only
 
 const int WALL_DECORATION_INSET_X[] = {53, -53, -53, 53};
 const int WALL_DECORATION_INSET_Z[] = {-53, -53, 53, 53};
@@ -1794,6 +1792,98 @@ void world3d_draw_tile(World3D *world3d, Ground *next, bool checkAdjacent, int l
     }
 }
 
+// fork: near clipping for ground in first person. The original skips a whole ground
+// tile when any corner is nearer than the near plane (z < 50); the overhead camera never
+// meets that, but at eye level the tiles at the player's feet vanish and the background
+// shows through. This clips one ground triangle (view space x, y, z and colour per
+// vertex) against the plane and draws what is left, one or two triangles. A textured
+// triangle keeps the tile's texture basis (origin and two axis points), so the texture
+// lines up with the unclipped tiles.
+#define GROUND_NEAR 50
+
+static bool ground_clipping(void) {
+#ifdef GL11
+    if (_Custom.use_opengl11) {
+        return false;
+    }
+#endif
+    return _Custom.first_person && !_Custom.dev_nofix; // dev_nofix: compare with the original
+}
+
+static void ground_triangle_clipped(int tileX, int tileZ, const int *a, const int *b, const int *c, int textureId, const int *basis) {
+    const int *in[3] = {a, b, c};
+    int poly[4][4];
+    int n = 0;
+    for (int i = 0; i < 3; i++) {
+        const int *p = in[i];
+        const int *q = in[(i + 1) % 3];
+        bool pIn = p[2] >= GROUND_NEAR;
+        bool qIn = q[2] >= GROUND_NEAR;
+        if (pIn) {
+            for (int k = 0; k < 4; k++) {
+                poly[n][k] = p[k];
+            }
+            n++;
+        }
+        if (pIn != qIn) {
+            // Cut from the vertex in front, so the two triangles sharing an edge get
+            // the same point (no crack along the tile's diagonal).
+            const int *f = pIn ? p : q;
+            const int *r = pIn ? q : p;
+            float t = (float)(GROUND_NEAR - f[2]) / (float)(r[2] - f[2]);
+            for (int k = 0; k < 4; k++) {
+                poly[n][k] = f[k] + (int)((r[k] - f[k]) * t);
+            }
+            poly[n][2] = GROUND_NEAR;
+            n++;
+        }
+    }
+    if (n < 3) {
+        return;
+    }
+    int sx[4];
+    int sy[4];
+    for (int i = 0; i < n; i++) {
+        sx[i] = _Pix3D.center_x + (poly[i][0] << 9) / poly[i][2];
+        sy[i] = _Pix3D.center_y + (poly[i][1] << 9) / poly[i][2];
+    }
+    for (int t = 1; t + 1 < n; t++) {
+        int x0 = sx[0], x1 = sx[t], x2 = sx[t + 1];
+        int y0 = sy[0], y1 = sy[t], y2 = sy[t + 1];
+        if ((x0 - x1) * (y2 - y1) - (y0 - y1) * (x2 - x1) <= 0) {
+            continue;
+        }
+        _Pix3D.clipX = x0 < 0 || x1 < 0 || x2 < 0 || x0 > _Pix2D.bound_x || x1 > _Pix2D.bound_x || x2 > _Pix2D.bound_x;
+        if (_World3D.takingInput && point_inside_triangle(_World3D.mouseX, _World3D.mouseY, y0, y1, y2, x0, x1, x2)) {
+            _World3D.clickTileX = tileX;
+            _World3D.clickTileZ = tileZ;
+        }
+        if (textureId == -1) {
+            gouraudTriangle(x0, x1, x2, y0, y1, y2, poly[0][3], poly[t][3], poly[t + 1][3]);
+        } else {
+            textureTriangle(x0, x1, x2, y0, y1, y2, poly[0][3], poly[t][3], poly[t + 1][3], basis[0], basis[1], basis[2], basis[3], basis[4], basis[5], basis[6], basis[7], basis[8], textureId);
+        }
+    }
+}
+
+// One ground triangle as the original draws it: untextured (skipped when its first
+// colour is 12345678), low-memory texture as a shaded average colour, or textured.
+static void ground_triangle_fp(int tileX, int tileZ, int *a, int *b, int *c, int textureId, const int *basis) {
+    if (textureId == -1) {
+        if (a[3] != 12345678) {
+            ground_triangle_clipped(tileX, tileZ, a, b, c, -1, NULL);
+        }
+    } else if (_World3D.lowMemory) {
+        int average = TEXTURE_HSL[textureId];
+        int la[4] = {a[0], a[1], a[2], mul_lightness(average, a[3])};
+        int lb[4] = {b[0], b[1], b[2], mul_lightness(average, b[3])};
+        int lc[4] = {c[0], c[1], c[2], mul_lightness(average, c[3])};
+        ground_triangle_clipped(tileX, tileZ, la, lb, lc, -1, NULL);
+    } else {
+        ground_triangle_clipped(tileX, tileZ, a, b, c, textureId, basis);
+    }
+}
+
 void world3d_draw_tileunderlay(World3D *world3d, TileUnderlay *underlay, int level, int tileX, int tileZ, int sinEyePitch, int cosEyePitch, int sinEyeYaw, int cosEyeYaw) {
 #ifdef GL11
     if (_Custom.use_opengl11) {
@@ -1873,10 +1963,6 @@ void world3d_draw_tileunderlay(World3D *world3d, TileUnderlay *underlay, int lev
     z0 = (y0 * sinEyePitch + z0 * cosEyePitch) >> 16;
     y0 = tmp;
 
-    if (z0 < 50) {
-        return;
-    }
-
     tmp = (z1 * sinEyeYaw + x1 * cosEyeYaw) >> 16;
     z1 = (z1 * cosEyeYaw - x1 * sinEyeYaw) >> 16;
     x1 = tmp;
@@ -1884,10 +1970,6 @@ void world3d_draw_tileunderlay(World3D *world3d, TileUnderlay *underlay, int lev
     tmp = (y1 * cosEyePitch - z1 * sinEyePitch) >> 16;
     z1 = (y1 * sinEyePitch + z1 * cosEyePitch) >> 16;
     y1 = tmp;
-
-    if (z1 < 50) {
-        return;
-    }
 
     tmp = (z2 * sinEyeYaw + x2 * cosEyeYaw) >> 16;
     z2 = (z2 * cosEyeYaw - x2 * sinEyeYaw) >> 16;
@@ -1897,10 +1979,6 @@ void world3d_draw_tileunderlay(World3D *world3d, TileUnderlay *underlay, int lev
     z2 = (y2 * sinEyePitch + z2 * cosEyePitch) >> 16;
     y2 = tmp;
 
-    if (z2 < 50) {
-        return;
-    }
-
     tmp = (z3 * sinEyeYaw + x3 * cosEyeYaw) >> 16;
     z3 = (z3 * cosEyeYaw - x3 * sinEyeYaw) >> 16;
     x3 = tmp;
@@ -1909,7 +1987,28 @@ void world3d_draw_tileunderlay(World3D *world3d, TileUnderlay *underlay, int lev
     z3 = (y3 * sinEyePitch + z3 * cosEyePitch) >> 16;
     y3 = tmp;
 
-    if (z3 < 50) {
+    if (z0 < 50 || z1 < 50 || z2 < 50 || z3 < 50) {
+        if (!ground_clipping()) {
+            return;
+        }
+        // fork: first person, a corner is behind the near plane: clip the two triangles.
+        int v0[4] = {x0, y0, z0, underlay->southwestColor};
+        int v1[4] = {x1, y1, z1, underlay->southeastColor};
+        int v2[4] = {x2, y2, z2, underlay->northeastColor};
+        int v3[4] = {x3, y3, z3, underlay->northwestColor};
+        int flatBasis[9] = {x0, y0, z0, x1, x3, y1, y3, z1, z3};
+        int slopeBasis[9] = {x2, y2, z2, x3, x1, y3, y1, z3, z1};
+        _Pix3D.alpha = 0;
+        if (underlay->textureId == -1) {
+            if (underlay->northeastColor != 12345678) {
+                ground_triangle_fp(tileX, tileZ, v2, v3, v1, -1, NULL);
+            }
+        } else {
+            ground_triangle_fp(tileX, tileZ, v2, v3, v1, underlay->textureId, underlay->flat ? flatBasis : slopeBasis);
+        }
+        if (underlay->textureId != -1 || underlay->southwestColor != 12345678) {
+            ground_triangle_fp(tileX, tileZ, v0, v1, v3, underlay->textureId, flatBasis);
+        }
         return;
     }
 
@@ -1975,7 +2074,11 @@ void world3d_draw_tileunderlay(World3D *world3d, TileUnderlay *underlay, int lev
     }
 }
 
+#define OVERLAY_FP_MAX 16
+
 void world3d_draw_tileoverlay(int tileX, int tileZ, TileOverlay *overlay, int sinEyePitch, int cosEyePitch, int sinEyeYaw, int cosEyeYaw) {
+    int overlayView[OVERLAY_FP_MAX][3]; // fork: view space per vertex, for near clipping
+    bool nearClip = false;
     for (int i = 0; i < overlay->vertexCount; i++) {
         int x = overlay->vertexX[i] - _World3D.eyeX;
         int y = overlay->vertexY[i] - _World3D.eyeY;
@@ -1989,8 +2092,16 @@ void world3d_draw_tileoverlay(int tileX, int tileZ, TileOverlay *overlay, int si
         z = (y * sinEyePitch + z * cosEyePitch) >> 16;
         y = tmp;
 
+        if (i < OVERLAY_FP_MAX) {
+            overlayView[i][0] = x;
+            overlayView[i][1] = y;
+            overlayView[i][2] = z;
+        }
         if (z < 50) {
-            return;
+            if (!ground_clipping() || overlay->vertexCount > OVERLAY_FP_MAX) {
+                return;
+            }
+            nearClip = true;
         }
 
         if (overlay->triangleTextureIds) {
@@ -1998,8 +2109,10 @@ void world3d_draw_tileoverlay(int tileX, int tileZ, TileOverlay *overlay, int si
             _TileOverlay.tmpViewspaceY[i] = y;
             _TileOverlay.tmpViewspaceZ[i] = z;
         }
-        _TileOverlay.tmpScreenX[i] = _Pix3D.center_x + (x << 9) / z;
-        _TileOverlay.tmpScreenY[i] = _Pix3D.center_y + (y << 9) / z;
+        if (z >= 50) {
+            _TileOverlay.tmpScreenX[i] = _Pix3D.center_x + (x << 9) / z;
+            _TileOverlay.tmpScreenY[i] = _Pix3D.center_y + (y << 9) / z;
+        }
 
 #ifdef GL11
         if (_Custom.use_opengl11) {
@@ -2068,6 +2181,31 @@ void world3d_draw_tileoverlay(int tileX, int tileZ, TileOverlay *overlay, int si
     }
 #endif
     _Pix3D.alpha = 0;
+
+    if (nearClip) {
+        // fork: first person, a vertex is behind the near plane: clip each triangle.
+        for (int v = 0; v < overlay->triangleCount; v++) {
+            int a = overlay->triangleVertexA[v];
+            int b = overlay->triangleVertexB[v];
+            int c = overlay->triangleVertexC[v];
+            int va[4] = {overlayView[a][0], overlayView[a][1], overlayView[a][2], overlay->triangleColorA[v]};
+            int vb[4] = {overlayView[b][0], overlayView[b][1], overlayView[b][2], overlay->triangleColorB[v]};
+            int vc[4] = {overlayView[c][0], overlayView[c][1], overlayView[c][2], overlay->triangleColorC[v]};
+            int textureId = overlay->triangleTextureIds ? overlay->triangleTextureIds[v] : -1;
+            int basis[9];
+            int o = overlay->flat ? 0 : a;
+            int m = overlay->flat ? 1 : b;
+            int q = overlay->flat ? 3 : c;
+            if (textureId != -1) {
+                int bx[9] = {overlayView[o][0], overlayView[o][1], overlayView[o][2], overlayView[m][0], overlayView[q][0], overlayView[m][1], overlayView[q][1], overlayView[m][2], overlayView[q][2]};
+                for (int k = 0; k < 9; k++) {
+                    basis[k] = bx[k];
+                }
+            }
+            ground_triangle_fp(tileX, tileZ, va, vb, vc, textureId, basis);
+        }
+        return;
+    }
 
     for (int v = 0; v < overlay->triangleCount; v++) {
         int a = overlay->triangleVertexA[v];

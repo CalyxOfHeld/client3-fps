@@ -302,9 +302,52 @@ static void build_visibility(Client *c, int eyeX, int eyeY, int eyeZ, int yaw, i
     }
 }
 
+// Dev: logs the five steepest tiles within 20 tiles of the player, once, at least
+// 4 tiles apart (candidates for dev_eye_x/z).
+static void dev_log_slopes(Client *c) {
+    static bool done;
+    if (done) {
+        return;
+    }
+    done = true;
+    int px = c->local_player->pathing_entity.x >> 7;
+    int pz = c->local_player->pathing_entity.z >> 7;
+    int (*h)[105] = c->levelHeightmap[c->currentLevel];
+    int foundX[5], foundZ[5];
+    for (int n = 0; n < 5; n++) {
+        int best = -1, bx = 0, bz = 0;
+        for (int x = px - 20; x <= px + 20; x++) {
+            for (int z = pz - 20; z <= pz + 20; z++) {
+                if (x < 1 || z < 1 || x > 102 || z > 102) {
+                    continue;
+                }
+                bool close = false;
+                for (int k = 0; k < n; k++) {
+                    if (abs(foundX[k] - x) < 4 && abs(foundZ[k] - z) < 4) {
+                        close = true;
+                    }
+                }
+                int rise = abs(h[x + 1][z] - h[x][z]) + abs(h[x][z + 1] - h[x][z]);
+                if (!close && rise > best) {
+                    best = rise, bx = x, bz = z;
+                }
+            }
+        }
+        foundX[n] = bx;
+        foundZ[n] = bz;
+        rs2_log("dev slope: tile=(%d,%d) rise=%d player=(%d,%d)\n", bx, bz, best, px, pz);
+    }
+}
+
 void firstperson_camera(Client *c) {
     int x = c->local_player->pathing_entity.x;
     int z = c->local_player->pathing_entity.z;
+    if (_Custom.dev_eye_x > 0 && _Custom.dev_eye_z > 0) {
+        // Dev: the camera stands on this tile (centre); the player stays where it is.
+        dev_log_slopes(c);
+        x = (_Custom.dev_eye_x << 7) + 64;
+        z = (_Custom.dev_eye_z << 7) + 64;
+    }
     c->cameraX = x;
     c->cameraZ = z;
     c->cameraY = getHeightmapY(c, c->currentLevel, x, z) - FP_EYE_HEIGHT;
@@ -420,6 +463,14 @@ static void dev_capture(Client *c) {
         return;
     }
     int i = f / 40;
+    static bool pitched;
+    if (f == 0 && _Custom.dev_capture_pitch && !pitched) {
+        pitched = true;
+        // Dev: the four level captures use this pitch (negative looks up) and wait for it.
+        _FirstPerson.pitch = _Custom.dev_capture_pitch;
+        _FirstPerson.frame -= 40;
+        return;
+    }
 #if SDL == 2
     char path[64];
     snprintf(path, sizeof(path), "fps-capture-%d.bmp", i);

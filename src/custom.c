@@ -121,6 +121,10 @@ void load_ini_config(Client *c) {
     INI_INT_LOG(&(&_Custom), dev_capture_count, );
     INI_INT_LOG(&(&_Custom), dev_walk, );
     INI_INT_LOG(&(&_Custom), dev_wander, );
+    INI_INT_LOG(&(&_Custom), dev_eye_x, );
+    INI_INT_LOG(&(&_Custom), dev_eye_z, );
+    INI_INT_LOG(&(&_Custom), dev_capture_pitch, );
+    INI_INT_LOG(&(&_Custom), dev_nofix, );
 #ifdef GL11
     _Custom.use_opengl11 = true;
 #endif

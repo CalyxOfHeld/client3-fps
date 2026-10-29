@@ -1,0 +1,349 @@
+RS2 user client - release #225
+World config:
+  socketip: 192.168.1.100
+  http_port: 80
+  nodeid: 10
+  portoff: 1
+  lowmem: 0
+  members: 1
+
+Options config:
+  rsa_exponent: 81f390b2cf8ca7039ee507975951d5a0b15a87bf8b3f99c966834118c50fd94d
+  rsa_modulus: 88c38748a58228f7261cdc340b5691d7d0975dee0ecdb717609e6bf971eb3fe723ef9d130e4686813739768ad9472eb46d8bfcc042c1a5fcb05e931f632eea5d
+  username: shared
+  password: *********
+  hide_dns: 0
+  hide_debug_sprite: 1
+  allow_commands: 1
+  allow_debugprocs: 1
+  chat_era: 0
+  remember_username: 1
+  remember_password: 1
+  resizable: 0
+  item_outlines: 1
+  show_performance: 1
+  first_person: 1
+  dev_autologin: 0
+  dev_capture_frame: 0
+  dev_capture_count: 0
+  dev_walk: 0
+  dev_wander: 0
+
+[ERROR] SDL_OpenAudioDevice(): Audio device already open
+audio: driver=wiiu soundfont=loaded midi_status=1 wave_device=0
+pad button 0 down
+pad button 0 down
+beat: cycle=2223 fps=50 first_person=1 tile=(0,0) level=0 yaw=2039 pitch=0
+pad button 0 down
+pad button 18 down
+pad axis 0 first moved: 20320
+pad button 17 down
+pad button 20 down
+pad button 21 down
+pad button 23 down
+pad axis 2 first moved: -18590
+pad axis 3 first moved: 26964
+pad button 20 down
+pad axis 1 first moved: -17215
+pad button 17 down
+pad button 20 down
+pad button 20 down
+pad button 21 down
+pad button 8 down
+pad button 17 down
+pad button 20 down
+pad button 20 down
+pad button 18 down
+pad button 23 down
+pad button 8 down
+pad button 17 down
+pad button 23 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 8 down
+pad button 9 down
+pad button 17 down
+pad button 22 down
+pad button 18 down
+pad button 22 down
+pad button 21 down
+pad button 21 down
+pad button 22 down
+pad button 22 down
+pad button 23 down
+pad button 22 down
+pad button 23 down
+beat: cycle=2724 fps=26 first_person=1 tile=(54,57) level=0 yaw=1537 pitch=70
+pad button 20 down
+pad button 21 down
+pad button 21 down
+pad button 16 down
+pad button 21 down
+pad button 20 down
+pad button 20 down
+pad button 21 down
+pad button 18 down
+pad button 18 down
+pad button 20 down
+pad button 2 down
+pad button 0 down
+pad button 2 down
+pad button 1 down
+pad button 18 down
+pad button 22 down
+pad button 17 down
+pad button 17 down
+pad button 22 down
+pad button 16 down
+pad button 21 down
+pad button 9 down
+pad button 20 down
+pad button 21 down
+pad button 21 down
+pad button 16 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+beat: cycle=3224 fps=22 first_person=1 tile=(64,67) level=0 yaw=1674 pitch=7
+pad button 23 down
+pad button 16 down
+pad button 23 down
+pad button 17 down
+pad button 20 down
+pad button 21 down
+pad button 18 down
+pad button 22 down
+pad button 16 down
+pad button 20 down
+pad button 21 down
+pad button 19 down
+pad button 21 down
+pad button 16 down
+pad button 21 down
+pad button 22 down
+pad button 20 down
+pad button 19 down
+pad button 21 down
+pad button 13 down
+pad button 23 down
+pad button 16 down
+pad button 17 down
+pad button 23 down
+pad button 22 down
+pad button 17 down
+pad button 18 down
+pad button 16 down
+pad button 21 down
+pad button 20 down
+pad button 22 down
+pad button 17 down
+pad button 18 down
+pad button 22 down
+pad button 19 down
+pad button 20 down
+pad button 20 down
+pad button 16 down
+pad button 20 down
+pad button 21 down
+pad button 17 down
+pad button 22 down
+pad button 23 down
+beat: cycle=3724 fps=28 first_person=1 tile=(64,67) level=0 yaw=524 pitch=14
+pad button 23 down
+pad button 3 down
+pad button 18 down
+pad button 22 down
+pad button 23 down
+pad button 22 down
+pad button 23 down
+pad button 22 down
+pad button 18 down
+pad button 18 down
+pad button 23 down
+pad button 22 down
+pad button 14 down
+pad button 13 down
+pad button 12 down
+pad button 14 down
+pad button 12 down
+pad button 23 down
+beat: cycle=4224 fps=23 first_person=1 tile=(61,73) level=0 yaw=1464 pitch=-85
+pad button 20 down
+pad button 23 down
+pad button 9 down
+pad button 21 down
+pad button 17 down
+pad button 9 down
+pad button 22 down
+pad button 21 down
+pad button 9 down
+pad button 20 down
+pad button 23 down
+pad button 9 down
+pad button 21 down
+pad button 21 down
+pad button 9 down
+pad button 23 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 21 down
+pad button 22 down
+pad button 20 down
+pad button 20 down
+pad button 20 down
+pad button 23 down
+pad button 9 down
+pad button 20 down
+pad button 23 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+beat: cycle=4725 fps=23 first_person=1 tile=(73,73) level=0 yaw=1289 pitch=69
+pad button 22 down
+pad button 21 down
+pad button 21 down
+pad button 21 down
+pad button 21 down
+pad button 23 down
+pad button 21 down
+pad button 9 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 20 down
+pad button 9 down
+pad button 20 down
+pad button 20 down
+pad button 20 down
+pad button 23 down
+pad button 20 down
+pad button 23 down
+pad button 23 down
+pad button 23 down
+pad button 22 down
+pad button 23 down
+pad button 22 down
+pad button 22 down
+pad button 21 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 20 down
+pad button 21 down
+pad button 20 down
+pad button 21 down
+pad button 20 down
+pad button 23 down
+beat: cycle=5225 fps=22 first_person=1 tile=(81,67) level=0 yaw=1791 pitch=2
+pad button 22 down
+pad button 22 down
+pad button 22 down
+pad button 23 down
+pad button 21 down
+pad button 22 down
+pad button 22 down
+pad button 21 down
+pad button 20 down
+pad button 20 down
+pad button 20 down
+pad button 20 down
+pad button 22 down
+pad button 23 down
+pad button 22 down
+pad button 23 down
+pad button 20 down
+pad button 23 down
+pad button 16 down
+pad button 17 down
+pad button 23 down
+beat: cycle=5725 fps=28 first_person=1 tile=(81,67) level=0 yaw=171 pitch=184
+pad button 20 down
+pad button 18 down
+pad button 20 down
+pad button 20 down
+pad button 19 down
+pad button 23 down
+pad button 16 down
+pad button 22 down
+pad button 20 down
+pad button 23 down
+pad button 19 down
+pad button 20 down
+pad button 21 down
+pad button 20 down
+pad button 17 down
+pad button 20 down
+pad button 23 down
+pad button 20 down
+pad button 23 down
+pad button 23 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 23 down
+pad button 20 down
+pad button 23 down
+pad button 21 down
+pad button 23 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+beat: cycle=6225 fps=32 first_person=1 tile=(81,75) level=0 yaw=742 pitch=272
+pad button 20 down
+pad button 21 down
+pad button 22 down
+pad button 23 down
+pad button 23 down
+pad button 22 down
+pad button 23 down
+pad button 21 down
+pad button 21 down
+pad button 21 down
+pad button 20 down
+pad button 23 down
+pad button 23 down
+pad button 20 down
+pad button 23 down
+pad button 23 down
+pad button 23 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 22 down
+pad button 21 down
+pad button 23 down
+pad button 22 down
+pad button 23 down
+pad button 19 down
+pad button 19 down
+beat: cycle=6725 fps=27 first_person=1 tile=(82,75) level=0 yaw=546 pitch=41
+pad button 17 down
+pad button 20 down
+pad button 18 down
+pad button 23 down
+pad button 19 down
+pad button 23 down
+pad button 8 down
+pad button 14 down
+beat: cycle=7225 fps=32 first_person=1 tile=(81,74) level=0 yaw=1430 pitch=241
+pad button 8 down
+pad button 16 down
+pad button 17 down
+pad button 17 down
+pad button 20 down
+pad button 21 down
+pad button 19 down
+pad button 17 down

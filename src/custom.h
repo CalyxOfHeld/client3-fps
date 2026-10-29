@@ -28,6 +28,10 @@ typedef struct {
     int dev_capture_count;
     int dev_walk;
     int dev_wander;
+    int dev_eye_x;
+    int dev_eye_z;
+    int dev_capture_pitch;
+    int dev_nofix;
 } Custom;
 
 bool load_ini_args(void);

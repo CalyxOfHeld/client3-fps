@@ -968,34 +968,46 @@ void model_draw_simple(Model *m, int pitch, int yaw, int roll, int eyePitch, int
 }
 
 void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int sinCameraYaw, int cosCameraYaw, int sceneX, int sceneY, int sceneZ, int key) {
+    // fork: in first person the bounds are a sphere around the whole model. The original
+    // extents (radius scaled by the pitch, height only above the origin) assume a camera
+    // looking down from a distance; at eye level they can put a nearby wall or building
+    // wholly off screen or behind the near plane while part of it is in view, and it is
+    // skipped (the scene shows through). The sphere only ever draws more.
+    int radius = m->radius;
+    int sphere = 0;
+    if (_Custom.first_person && !_Custom.dev_nofix) { // dev_nofix: compare with the original
+        int height = m->min_y > m->max_y ? m->min_y : m->max_y;
+        sphere = (int)(SQRT((DOUBLE)(m->radius * m->radius + height * height)) + 0.99);
+        radius = sphere;
+    }
     int a = (sceneZ * cosCameraYaw - sceneX * sinCameraYaw) >> 16;
     int b = (sceneY * sinCameraPitch + a * cosCameraPitch) >> 16;
-    int c = m->radius * cosCameraPitch >> 16;
+    int c = sphere ? sphere : m->radius * cosCameraPitch >> 16;
     int d = b + c;
     if (d <= 50 || b >= 3500) {
         return;
     }
     int e = (sceneZ * sinCameraYaw + sceneX * cosCameraYaw) >> 16;
-    int minScreenX = (e - m->radius) << 9;
+    int minScreenX = (e - radius) << 9;
     if (minScreenX / d >= _Pix2D.center_x) {
         return;
     }
-    int maxScreenX = (e + m->radius) << 9;
+    int maxScreenX = (e + radius) << 9;
     if (maxScreenX / d <= -_Pix2D.center_x) {
         return;
     }
     int f = (sceneY * cosCameraPitch - a * sinCameraPitch) >> 16;
-    int g = m->radius * sinCameraPitch >> 16;
+    int g = sphere ? sphere : m->radius * sinCameraPitch >> 16;
     int maxScreenY = (f + g) << 9;
     if (maxScreenY / d <= -_Pix2D.center_y) {
         return;
     }
-    int h = g + (m->max_y * cosCameraPitch >> 16);
+    int h = sphere ? sphere : g + (m->max_y * cosCameraPitch >> 16);
     int minScreenY = (f - h) << 9;
     if (minScreenY / d >= _Pix2D.center_y) {
         return;
     }
-    int i = c + (m->max_y * sinCameraPitch >> 16);
+    int i = sphere ? sphere : c + (m->max_y * sinCameraPitch >> 16);
     bool project = false;
     if (b - i <= 50) {
         project = true;
@@ -1071,7 +1083,7 @@ void model_draw(Model *m, int yaw, int sinCameraPitch, int cosCameraPitch, int s
 #ifdef GL11
         if (!_Custom.use_opengl11) { // gl uses pmn_to_uv instead
 #endif
-            if (project || m->textured_face_count > 0) {
+            if (project || m->textured_face_count > 0 || _Custom.first_person) { // fork: project can turn true part way through, after vertices it then needs
                 _Model.vertex_view_space_x[v] = x;
                 _Model.vertex_view_space_y[v] = temp;
                 _Model.vertex_view_space_z[v] = z;
@@ -1319,6 +1331,17 @@ void model_draw_face(Model *m, int index) {
     }
 }
 
+// fork: the depth differences here can pass the end of reciprical16 (2048 entries)
+// once a model reaches well behind the camera.
+static int near_reciprocal16(int d) {
+    return d < 2048 ? _Pix3D.reciprical16[d] : 65536 / d;
+}
+
+// fork: a vertex behind the near plane has no screen position (-5000), so the edge
+// to it is cut at z=50 in view space, as in the Java client. The port read the screen
+// arrays here (screen x/y for the vertex in front, -5000 for the one behind, depth
+// relative to the model), which threw the cut points far off and drew the face as a
+// huge smear; the overhead camera seldom cuts a face, first person does all the time.
 void model_draw_near_clipped_face(Model *m, int index) {
     int centerX = _Pix3D.center_x;
     int centerY = _Pix3D.center_y;
@@ -1326,9 +1349,9 @@ void model_draw_near_clipped_face(Model *m, int index) {
     int a = m->face_indices_a[index];
     int b = m->face_indices_b[index];
     int c = m->face_indices_c[index];
-    int zA = _Model.vertex_screen_z[a];
-    int zB = _Model.vertex_screen_z[b];
-    int zC = _Model.vertex_screen_z[c];
+    int zA = _Model.vertex_view_space_z[a];
+    int zB = _Model.vertex_view_space_z[b];
+    int zC = _Model.vertex_view_space_z[c];
     int xA;
     int xB;
     int xC;
@@ -1339,20 +1362,20 @@ void model_draw_near_clipped_face(Model *m, int index) {
         n++;
         _Model.clipped_color[0] = m->face_color_a[index];
     } else {
-        xA = _Model.vertex_screen_x[a];
-        xB = _Model.vertex_screen_y[a];
+        xA = _Model.vertex_view_space_x[a];
+        xB = _Model.vertex_view_space_y[a];
         xC = m->face_color_a[index];
         if (zC >= 50) {
-            yA = (50 - zA) * _Pix3D.reciprical16[zC - zA];
-            _Model.clipped_x[0] = centerX + ((xA + ((_Model.vertex_screen_x[c] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[0] = centerY + ((xB + ((_Model.vertex_screen_y[c] - xB) * yA >> 16)) << 9) / 50;
+            yA = (50 - zA) * near_reciprocal16(zC - zA);
+            _Model.clipped_x[0] = centerX + ((xA + ((_Model.vertex_view_space_x[c] - xA) * yA >> 16)) << 9) / 50;
+            _Model.clipped_y[0] = centerY + ((xB + ((_Model.vertex_view_space_y[c] - xB) * yA >> 16)) << 9) / 50;
             n++;
             _Model.clipped_color[0] = xC + ((m->face_color_c[index] - xC) * yA >> 16);
         }
         if (zB >= 50) {
-            yA = (50 - zA) * _Pix3D.reciprical16[zB - zA];
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_screen_x[b] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_screen_y[b] - xB) * yA >> 16)) << 9) / 50;
+            yA = (50 - zA) * near_reciprocal16(zB - zA);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[b] - xA) * yA >> 16)) << 9) / 50;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[b] - xB) * yA >> 16)) << 9) / 50;
             _Model.clipped_color[n++] = xC + ((m->face_color_b[index] - xC) * yA >> 16);
         }
     }
@@ -1361,19 +1384,19 @@ void model_draw_near_clipped_face(Model *m, int index) {
         _Model.clipped_y[n] = _Model.vertex_screen_y[b];
         _Model.clipped_color[n++] = m->face_color_b[index];
     } else {
-        xA = _Model.vertex_screen_x[b];
-        xB = _Model.vertex_screen_y[b];
+        xA = _Model.vertex_view_space_x[b];
+        xB = _Model.vertex_view_space_y[b];
         xC = m->face_color_b[index];
         if (zA >= 50) {
-            yA = (50 - zB) * _Pix3D.reciprical16[zA - zB];
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_screen_x[a] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_screen_y[a] - xB) * yA >> 16)) << 9) / 50;
+            yA = (50 - zB) * near_reciprocal16(zA - zB);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[a] - xA) * yA >> 16)) << 9) / 50;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[a] - xB) * yA >> 16)) << 9) / 50;
             _Model.clipped_color[n++] = xC + ((m->face_color_a[index] - xC) * yA >> 16);
         }
         if (zC >= 50) {
-            yA = (50 - zB) * _Pix3D.reciprical16[zC - zB];
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_screen_x[c] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_screen_y[c] - xB) * yA >> 16)) << 9) / 50;
+            yA = (50 - zB) * near_reciprocal16(zC - zB);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[c] - xA) * yA >> 16)) << 9) / 50;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[c] - xB) * yA >> 16)) << 9) / 50;
             _Model.clipped_color[n++] = xC + ((m->face_color_c[index] - xC) * yA >> 16);
         }
     }
@@ -1382,19 +1405,19 @@ void model_draw_near_clipped_face(Model *m, int index) {
         _Model.clipped_y[n] = _Model.vertex_screen_y[c];
         _Model.clipped_color[n++] = m->face_color_c[index];
     } else {
-        xA = _Model.vertex_screen_x[c];
-        xB = _Model.vertex_screen_y[c];
+        xA = _Model.vertex_view_space_x[c];
+        xB = _Model.vertex_view_space_y[c];
         xC = m->face_color_c[index];
         if (zB >= 50) {
-            yA = (50 - zC) * _Pix3D.reciprical16[zB - zC];
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_screen_x[b] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_screen_y[b] - xB) * yA >> 16)) << 9) / 50;
+            yA = (50 - zC) * near_reciprocal16(zB - zC);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[b] - xA) * yA >> 16)) << 9) / 50;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[b] - xB) * yA >> 16)) << 9) / 50;
             _Model.clipped_color[n++] = xC + ((m->face_color_b[index] - xC) * yA >> 16);
         }
         if (zA >= 50) {
-            yA = (50 - zC) * _Pix3D.reciprical16[zA - zC];
-            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_screen_x[a] - xA) * yA >> 16)) << 9) / 50;
-            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_screen_y[a] - xB) * yA >> 16)) << 9) / 50;
+            yA = (50 - zC) * near_reciprocal16(zA - zC);
+            _Model.clipped_x[n] = centerX + ((xA + ((_Model.vertex_view_space_x[a] - xA) * yA >> 16)) << 9) / 50;
+            _Model.clipped_y[n] = centerY + ((xB + ((_Model.vertex_view_space_y[a] - xB) * yA >> 16)) << 9) / 50;
             _Model.clipped_color[n++] = xC + ((m->face_color_a[index] - xC) * yA >> 16);
         }
     }
